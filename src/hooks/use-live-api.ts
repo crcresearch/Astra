@@ -1,17 +1,6 @@
 /**
  * Copyright 2024 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the Apache License, Version 2.0
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -34,23 +23,47 @@ export type UseLiveAPIResults = {
   volume: number;
 };
 
+export interface UseLiveAPIOptions extends MultimodalLiveAPIClientConnection {
+  systemInstruction?: {
+    parts: Array<{ text: string }>;
+  };
+  onResponse?: (response: any) => void;
+}
+
+/**
+ * useLiveAPI is a custom hook that sets up the Multimodal Live API client along with audio streaming.
+ */
 export function useLiveAPI({
   url,
   apiKey,
-}: MultimodalLiveAPIClientConnection): UseLiveAPIResults {
+  systemInstruction,
+  onResponse,
+}: UseLiveAPIOptions): UseLiveAPIResults {
   const client = useMemo(
     () => new MultimodalLiveClient({ url, apiKey }),
-    [url, apiKey],
+    [url, apiKey]
   );
   const audioStreamerRef = useRef<AudioStreamer | null>(null);
 
-  const [connected, setConnected] = useState(false);
   const [config, setConfig] = useState<LiveConfig>({
     model: "models/gemini-2.0-flash-exp",
   });
+  const [connected, setConnected] = useState(false);
   const [volume, setVolume] = useState(0);
 
-  // register audio for streaming server -> speakers
+  // Listen for "content" events from the client (which serve as our response).
+  useEffect(() => {
+    if (onResponse) {
+      client.on("content", onResponse);
+    }
+    return () => {
+      if (onResponse) {
+        client.off("content", onResponse);
+      }
+    };
+  }, [client, onResponse]);
+
+  // Setup the audio streamer.
   useEffect(() => {
     if (!audioStreamerRef.current) {
       audioContext({ id: "audio-out" }).then((audioCtx: AudioContext) => {
@@ -59,13 +72,14 @@ export function useLiveAPI({
           .addWorklet<any>("vumeter-out", VolMeterWorket, (ev: any) => {
             setVolume(ev.data.volume);
           })
-          .then(() => {
-            // Successfully added worklet
+          .catch((err) => {
+            console.error("Failed to add worklet:", err);
           });
       });
     }
-  }, [audioStreamerRef]);
+  }, []);
 
+  // Register event listeners for connection-related events.
   useEffect(() => {
     const onClose = () => {
       setConnected(false);
@@ -76,33 +90,45 @@ export function useLiveAPI({
     const onAudio = (data: ArrayBuffer) =>
       audioStreamerRef.current?.addPCM16(new Uint8Array(data));
 
-    client
-      .on("close", onClose)
+    client.on("close", onClose)
       .on("interrupted", stopAudioStreamer)
       .on("audio", onAudio);
 
     return () => {
-      client
-        .off("close", onClose)
-        .off("interrupted", stopAudioStreamer)
-        .off("audio", onAudio);
+      client.off("close", onClose);
+      client.off("interrupted", stopAudioStreamer);
+      client.off("audio", onAudio);
     };
   }, [client]);
 
   const connect = useCallback(async () => {
-    console.log(config);
-    if (!config) {
-      throw new Error("config has not been set");
-    }
+    if (!config) throw new Error("Config not set");
+    const fullConfig: LiveConfig = systemInstruction
+      ? {
+          ...config,
+          systemInstruction: {
+            parts: [
+              ...systemInstruction.parts,
+              { text: "RESPOND ONLY WITH LOWERCASE EMOTION" },
+            ],
+          },
+        }
+      : {
+          ...config,
+          systemInstruction: {
+            parts: [{ text: "RESPOND ONLY WITH LOWERCASE EMOTION" }],
+          },
+        };
+
     client.disconnect();
-    await client.connect(config);
+    await client.connect(fullConfig);
     setConnected(true);
-  }, [client, setConnected, config]);
+  }, [client, config, systemInstruction]);
 
   const disconnect = useCallback(async () => {
     client.disconnect();
     setConnected(false);
-  }, [setConnected, client]);
+  }, [client]);
 
   return {
     client,

@@ -15,7 +15,6 @@
  */
 
 import cn from "classnames";
-
 import { memo, ReactNode, RefObject, useEffect, useRef, useState } from "react";
 import { useLiveAPIContext } from "../../contexts/LiveAPIContext";
 import { UseMediaStreamResult } from "../../hooks/use-media-stream-mux";
@@ -41,7 +40,7 @@ type MediaStreamButtonProps = {
 };
 
 /**
- * button used for triggering webcam or screen-capture
+ * Button used for triggering webcam or screen-capture.
  */
 const MediaStreamButton = memo(
   ({ isStreaming, onIcon, offIcon, start, stop }: MediaStreamButtonProps) =>
@@ -53,7 +52,7 @@ const MediaStreamButton = memo(
       <button className="action-button" onClick={start}>
         <span className="material-symbols-outlined">{offIcon}</span>
       </button>
-    ),
+    )
 );
 
 function ControlTray({
@@ -63,8 +62,7 @@ function ControlTray({
   supportsVideo,
 }: ControlTrayProps) {
   const videoStreams = [useWebcam(), useScreenCapture()];
-  const [activeVideoStream, setActiveVideoStream] =
-    useState<MediaStream | null>(null);
+  const [activeVideoStream, setActiveVideoStream] = useState<MediaStream | null>(null);
   const [webcam, screenCapture] = videoStreams;
   const [inVolume, setInVolume] = useState(0);
   const [audioRecorder] = useState(() => new AudioRecorder());
@@ -72,21 +70,90 @@ function ControlTray({
   const renderCanvasRef = useRef<HTMLCanvasElement>(null);
   const connectButtonRef = useRef<HTMLButtonElement>(null);
 
-  const { client, connected, connect, disconnect, volume } =
-    useLiveAPIContext();
+  const { client, connected, connect, disconnect, volume } = useLiveAPIContext();
 
+  // High-quality capture effect: automatically send video frame for emotion detection.
   useEffect(() => {
-    if (!connected && connectButtonRef.current) {
-      connectButtonRef.current.focus();
+    let timeoutId: number;
+    function sendVideoFrame() {
+      const video = videoRef.current;
+      const canvas = renderCanvasRef.current;
+      if (!video || !canvas || video.videoWidth === 0) return;
+  
+      // Capture high-quality image
+      canvas.width = 640;
+      canvas.height = 480;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  
+      const base64 = canvas.toDataURL("image/jpeg", 0.9);
+      const data = base64.split(",")[1];
+  
+      // Send a composite realtime input:
+      // 1. The image data (for visual analysis)
+      // 2. A text prompt that triggers the emotion analysis
+      client.sendRealtimeInput([
+        {
+          mimeType: "image/jpeg",
+          data,
+          metadata: {
+            analysisType: "emotion-detection",
+            timestamp: Date.now(),
+          } as any,
+        },
+        {
+          text: "analyze facial expression. Respond with one lowercase word: happy, sad, angry, or neutral.",
+        } as any,
+      ]);
+  
+      if (connected) {
+        timeoutId = window.setTimeout(sendVideoFrame, 1000 / 5); // 5 FPS
+      }
     }
-  }, [connected]);
-  useEffect(() => {
-    document.documentElement.style.setProperty(
-      "--volume",
-      `${Math.max(5, Math.min(inVolume * 200, 8))}px`,
-    );
-  }, [inVolume]);
+  
+    if (connected && activeVideoStream) {
+      sendVideoFrame();
+    }
+    return () => clearTimeout(timeoutId);
+  }, [connected, activeVideoStream, client, videoRef]);
 
+  // Set video element's source.
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.srcObject = activeVideoStream;
+    }
+  }, [activeVideoStream, videoRef]);
+
+  // Lower-quality capture effect (for auxiliary tasks).
+  useEffect(() => {
+    let timeoutId = -1;
+    function sendVideoFrame() {
+      const video = videoRef.current;
+      const canvas = renderCanvasRef.current;
+      if (!video || !canvas) return;
+  
+      const ctx = canvas.getContext("2d")!;
+      canvas.width = video.videoWidth * 0.25;
+      canvas.height = video.videoHeight * 0.25;
+      if (canvas.width + canvas.height > 0) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const base64 = canvas.toDataURL("image/jpeg", 1.0);
+        const data = base64.slice(base64.indexOf(",") + 1);
+        client.sendRealtimeInput([{ mimeType: "image/jpeg", data }]);
+      }
+      if (connected) {
+        timeoutId = window.setTimeout(sendVideoFrame, 1000 / 0.5);
+      }
+    }
+    if (connected && activeVideoStream !== null) {
+      requestAnimationFrame(sendVideoFrame);
+    }
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [connected, activeVideoStream, client, videoRef]);
+
+  // Audio streaming effect.
   useEffect(() => {
     const onData = (base64: string) => {
       client.sendRealtimeInput([
@@ -106,43 +173,22 @@ function ControlTray({
     };
   }, [connected, client, muted, audioRecorder]);
 
+  // Focus the connect button when not connected.
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.srcObject = activeVideoStream;
+    if (!connected && connectButtonRef.current) {
+      connectButtonRef.current.focus();
     }
+  }, [connected]);
 
-    let timeoutId = -1;
+  // Update CSS variable for volume.
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--volume",
+      `${Math.max(5, Math.min(inVolume * 200, 8))}px`
+    );
+  }, [inVolume]);
 
-    function sendVideoFrame() {
-      const video = videoRef.current;
-      const canvas = renderCanvasRef.current;
-
-      if (!video || !canvas) {
-        return;
-      }
-
-      const ctx = canvas.getContext("2d")!;
-      canvas.width = video.videoWidth * 0.25;
-      canvas.height = video.videoHeight * 0.25;
-      if (canvas.width + canvas.height > 0) {
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const base64 = canvas.toDataURL("image/jpeg", 1.0);
-        const data = base64.slice(base64.indexOf(",") + 1, Infinity);
-        client.sendRealtimeInput([{ mimeType: "image/jpeg", data }]);
-      }
-      if (connected) {
-        timeoutId = window.setTimeout(sendVideoFrame, 1000 / 0.5);
-      }
-    }
-    if (connected && activeVideoStream !== null) {
-      requestAnimationFrame(sendVideoFrame);
-    }
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [connected, activeVideoStream, client, videoRef]);
-
-  //handler for swapping from one video-stream to the next
+  // Handler for swapping between video streams.
   const changeStreams = (next?: UseMediaStreamResult) => async () => {
     if (next) {
       const mediaStream = await next.start();
@@ -152,7 +198,6 @@ function ControlTray({
       setActiveVideoStream(null);
       onVideoStreamChange(null);
     }
-
     videoStreams.filter((msr) => msr !== next).forEach((msr) => msr.stop());
   };
 

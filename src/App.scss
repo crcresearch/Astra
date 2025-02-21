@@ -169,3 +169,56 @@ body {
   border-radius: 32px;
   max-height: fit-content;
 }
+
+// Add these styles at the bottom of App.scss
+
+.caregiver-feedback {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+
+  h3 {
+    color: #2d3748;
+    font-family: 'Space Mono', monospace;
+    margin-bottom: 1.5rem;
+  }
+}
+
+.suggestions-group {
+  margin: 1.5rem 0;
+
+  h4 {
+    color: #4a5568;
+    font-size: 0.95rem;
+    margin-bottom: 0.8rem;
+  }
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.8rem;
+  margin: 0.5rem 0;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  transition: transform 0.2s ease;
+
+  &:hover {
+    transform: translateX(5px);
+  }
+
+  .material-icons {
+    color: #4299e1;
+    font-size: 1.4rem;
+  }
+
+  p {
+    margin: 0;
+    color: #1a365d;
+    font-size: 0.9rem;
+  }
+}
