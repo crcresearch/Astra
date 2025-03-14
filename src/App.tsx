@@ -3,7 +3,7 @@
  * Licensed under the Apache License, Version 2.0
  */
 
-import { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback } from "react";
 import "./App.scss";
 import { LiveAPIProvider } from "./contexts/LiveAPIContext";
 import SidePanel from "./components/side-panel/SidePanel";
@@ -11,6 +11,7 @@ import { Altair } from "./components/altair/Altair";
 import ControlTray from "./components/control-tray/ControlTray";
 import cn from "classnames";
 import CaregiverSuggestions from "./components/CaregiverSuggestions";
+import FaceEmotionDetector from "./components/FaceEmotionDetector";
 
 type Emotion = "happy" | "sad" | "angry" | "neutral";
 
@@ -27,7 +28,7 @@ if (typeof API_KEY !== "string") {
 
 const host = "generativelanguage.googleapis.com";
 const uri = `wss://${host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent`;
-// NEW: Updated prompt instructing the model to output plain text without any JSON formatting.
+
 const EMOTION_PROMPT = `You are an expert in autism spectrum disorders and special needs care. The patient you are evaluating is an autistic individual with sensory sensitivities and communication challenges. Analyze ONLY the facial expressions and body language provided in the input video.
 Based on your analysis, respond in plain text using exactly the following format (each on a new line) and do not include any curly brackets, quotation marks, or extra punctuation:
 
@@ -95,6 +96,16 @@ function App() {
     }
   }, []);
 
+  // Callback to receive emotion from the custom face detector.
+  const handleCustomEmotionDetected = useCallback((emotion: Emotion) => {
+    console.log("Custom detected emotion:", emotion);
+    setDetectedSuggestions(prev => ({
+      emotion,
+      suggestionForPatient: prev?.suggestionForPatient || "",
+      suggestionForCaregiver: prev?.suggestionForCaregiver || "",
+    }));
+  }, []);
+
   return (
     <div className="App">
       <LiveAPIProvider
@@ -116,6 +127,8 @@ function App() {
                 autoPlay
                 playsInline
               />
+              {/* Render the custom face emotion detector */}
+              <FaceEmotionDetector videoRef={videoRef} onEmotionDetected={handleCustomEmotionDetected} />
               {detectedSuggestions && (
                 <div className="caregiver-feedback">
                   <CaregiverSuggestions suggestions={detectedSuggestions} />
