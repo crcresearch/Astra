@@ -8,7 +8,7 @@ Steps:
 - Format the MicroSD: download, install, run
 - https://www.sdcard.org/downloads/formatter/sd-memory-card-formatter-for-windows-download/
 - Select the MicroSD card. Use the quick format option. Leave volume label blank. Format.
-> [!CAUTION]: Formatting the MicroSD will wipe it in the process.
+> ⚠️ Formatting the MicroSD will wipe it in the process.
 2. Flashing the MicroSD with JetPack 6.2.1
 > Our Jetson Orin Nanos already have the updated firmware (36.+); therefore we do not need to update the firmware.
 - Download the JetPack 6.2.1 image: [JetPack 6.2.1 SDK](https://developer.nvidia.com/embedded/jetpack-sdk-621)
@@ -22,8 +22,9 @@ Steps:
 - Insert the MicroSD card into the Jetson Orin Nano's MicroSD card slot (under the board with the fan, on the outside edge)
 - Connect a mouse and keyboard + monitor
 - Plug in the power cable
-- Should boot up with the image!
-Notes:
+- Should boot up with the image!  
+
+Notes:  
 - You will likely have to do a couple of reboot cycles, especially once you connect to the internet as the automatic updates install.
 If boot fails:
 - Use the boot menu to select the MicroSD as the default boot device.
@@ -176,7 +177,7 @@ ollama pull gemma3n:e2b
 # Run
 ollama run gemma3n:e2b
 ```
-> [!CAUTION] Ensure you have enabled a higher swap memory before running the gemma3n:e2b model.
+> ⚠️ Ensure you have enabled a higher swap memory before running the gemma3n:e2b model.
 ## Python Virtual Environment Setup
 There is a bit of a quirk here. OpenCV comes installed on the Jetson's system Python. It is a pre-built wheel specific for the Jetson (V4L2 and GStreamer = ON).
 While this build is not a CUDA build, we most likely will not need OpenCV with CUDA; therefore it's not worth building from source (the only image I found appeared incorrectly built — likely from a container mimicking JP6.1 and not actually built on a Jetson).
@@ -199,7 +200,7 @@ We will be using these.
 ```bash
 sudo apt-get install -y libopenblas-dev
 ```
-- cuSPARSELt
+- cuSPARSELt  
 Thankfully, NVIDIA provides an installer for this:
 ```bash
 # Download the installer.
@@ -217,7 +218,7 @@ sudo apt-get update
 # And install
 sudo apt-get -y install cusparselt
 ```
-- cudss
+- cudss  
 Like cuSPARSELt, NVIDIA provides an installer for us:
 ```bash
 # Download the installer.
@@ -253,7 +254,7 @@ pip install ./<torchvision-wheel-file-here>
 #### Test Scripts
 Run these test scripts to ensure the GPU can be found and utilized by PyTorch:
 
-Matrix Multiplication (CPU vc GPU timing)
+Matrix Multiplication (CPU vs GPU timing)
 ```python
 import torch
 import time
@@ -423,7 +424,7 @@ model.fit(x_train, y_train, epochs=1, batch_size=512)
 Ensure that the GPU is found and used.
 > You can even see the GPU being utilized via `jtop`!
 ### OpenCV
-No pip install is needed for OpenCV. The system OpenCV should suffice. Just be sure you configured your virtual environment to allow `system-site-packages`.
+No pip install is needed for OpenCV. The system OpenCV should suffice. Just be sure you configured your virtual environment to allow `system-site-packages`.  
 However, if we ever needed to build from source for CUDA capability, the installer found [here](https://github.com/AastaNV/JEP/blob/master/script/install_opencv4.10.0_Jetpack6.1.sh) may be the way to go.
 ### PyAudio
 1. Install needed system packages
