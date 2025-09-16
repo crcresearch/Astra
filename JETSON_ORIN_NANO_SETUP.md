@@ -169,7 +169,7 @@ Simply run the installer:
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
 ```
-#### Pull  and Run gemma3n:e2b
+#### Pull and Run gemma3n:e2b
 ```bash
 # Pull
 ollama pull gemma3n:e2b
@@ -177,20 +177,15 @@ ollama pull gemma3n:e2b
 # Run
 ollama run gemma3n:e2b
 ```
-> ⚠️ Ensure you have enabled a higher swap memory before running the gemma3n:e2b model.
+> ⚠️ Ensure you have increased swap memory before running the gemma3n:e2b model.
 ## Python Virtual Environment Setup
-There is a bit of a quirk here. OpenCV comes installed on the Jetson's system Python. It is a pre-built wheel specific for the Jetson (V4L2 and GStreamer = ON).
-While this build is not a CUDA build, we most likely will not need OpenCV with CUDA; therefore it's not worth building from source (the only image I found appeared incorrectly built — likely from a container mimicking JP6.1 and not actually built on a Jetson).
-When creating the Python virtual environment, use the `--system-site-packages` flag.
-This enables using system packages if they are not installed in the venv.
+Create a Python virtual environment:
 ```bash
-python -m venv --system-site-packages myenv
+python3 -m venv <venv-name-here>
 ```
-> NOTE: The venv will prioritize venv packages. So if you have numpy installed in the venv and the system, the venv numpy will be used.  
-
-If you already have a Python virtual environment, enable system site packages by editing the venv's pyvenv.cfg and setting:
-```ini
-include-system-site-packages = true
+Activate it:
+```bash
+source <venv-name-here>/bin/activate
 ```
 ### PyTorch (+ torchvision)
 Thankfully, there are prebuilt torch and torchvision wheels with CUDA for the Jetson at [Jetson AI Lab - cu126 index](https://pypi.jetson-ai-lab.io/jp6/cu126)  
@@ -423,9 +418,38 @@ model.fit(x_train, y_train, epochs=1, batch_size=512)
 
 Ensure that the GPU is found and used.
 > You can even see the GPU being utilized via `jtop`!
+### InsightFace
+This requires managing a few dependencies.
+1. Install Insightface:
+```bash
+pip install insightface
+```
+This installs various dependencies; remove opencv-python-headless:
+```bash
+pip uninstall -y opencv-python-headless
+```
+2. Install onnxruntime and onnx:
+```bash
+# Use the Jetson AI Lab's GPU build
+pip install onnxruntime-gpu --index-url https://pypi.jetson-ai-lab.io/jp6/cu126
+
+pip install onnx
+```
+3. Upgrade ml-dtypes:
+The version of ml-dtypes we are using (0.3.x) for TensorFlow is not compatible with onnxruntime. However, upgrading it doesn't seem to break TensorFlow, so:
+```bash
+pip install ml-dtypes==0.5.3
+```
 ### OpenCV
-No pip install is needed for OpenCV. The system OpenCV should suffice. Just be sure you configured your virtual environment to allow `system-site-packages`.  
-However, if we ever needed to build from source for CUDA capability, the installer found [here](https://github.com/AastaNV/JEP/blob/master/script/install_opencv4.10.0_Jetpack6.1.sh) may be the way to go.
+We can make use of the Jetson AI Lab's pre-built wheel:
+```bash
+pip install opencv-contrib-python --no-dep --index-url https://pypi.jetson-ai-lab.io/jp6/cu126
+```
+The `--no-dep` flag avoids changing your numpy version.  
+Confirm that GStreamer and v4l/v4l2 are enabled:
+```bash
+python -c "import cv2; print(cv2.getBuildInformation())"
+```
 ### PyAudio
 1. Install needed system packages
 ```bash
@@ -438,5 +462,37 @@ pip install PyAudio
 ### Remaining packages
 The remaining packages from the [Requirements.txt](./Gemma_demo/Requirements.txt) can simply be pip installed:
 ```bash
-pip install librosa scikit-learn scipy transformers safetensors sounddevice
+pip install librosa scikit-learn scipy transformers safetensors sounddevice matplotlib
+```
+
+⚠️ It's quite possible that numpy was upgraded to numpy>=2.x during the environment setup process.
+This can be checked and remedied (ensure your venv is active):
+```bash
+# Check numpy version
+python -c "import numpy; print(numpy.__version__)"
+# If output is >=2.x:
+pip uninstall numpy
+pip install numpy==1.26.4
+```
+Our venv is intentionally "Frankensteined" because we're on specialized hardware and rely on community-managed wheels rather than professionally maintained ones. Running `pip check` will likely show warnings like:
+```bash
+albumentations 2.0.8 requires opencv-python-headless, which is not installed.
+albucore 0.0.24 requires opencv-python-headless, which is not installed.
+tensorflow 2.16.1+nv24.8 has requirement ml-dtypes~=0.3.1, but you have ml-dtypes 0.5.3.
+opencv-contrib-python 4.12.0 has requirement numpy<2.3.0,>=2; python_version >= "3.9", but you have numpy 1.26.4.
+```
+Be aware that when you update or install packages, pip may attempt to resolve these constraints, which can break the environment.
+Recommended practices:
+- Use `--no-deps` when installing wheels from Jetson AI Lab to avoid dependency churn.
+- Re-run the numpy check above after any package change.
+
+It's possible that opencv-python-headless was installed while upgrading or installing packages, if so:
+Check and remove opencv-python-headless
+To ensure the correct OpenCV build is used (and to avoid headless conflicts), check and remove `opencv-python-headless` if present (ensure your venv is active):
+```bash
+# Check if opencv-python-headless is installed
+pip show opencv-python-headless || echo "opencv-python-headless not installed"
+
+# Remove it if present
+pip uninstall -y opencv-python-headless
 ```
