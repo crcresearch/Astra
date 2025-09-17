@@ -29,8 +29,48 @@ Notes:
 If boot fails:
 - Use the boot menu to select the MicroSD as the default boot device.
 - From the boot menu, you can also confirm the firmware version is 36.+ if needed.
-### Cameras
-We have wireless cameras. TBD setup instructions.
+### Camera
+To set up the Tapo C120 for use with the Jetson Orin Nano, follow the instructions in the box and install the TP-Link Tapo app.  
+Create a Tapo account and follow the on-screen steps to add the camera.  
+After the camera is added, open it in the app, tap the settings icon (top-right), then go to "Advanced Settings" → "Camera Account" and create a camera account (this is different from your app account).  
+Find your camera's IP address in "Advanced Settings" → "Network Settings". While you're there, turn on "Static IP".
+#### Test Script
+Simple Python OpenCV script (run this after the [Python Virtual Environment Setup](#python-virtual-environment-setup))
+```python
+import cv2
+
+# Camera account credentials (set these to your camera account)
+user = "<camera-account-username>"
+password = "<camera-account-password>"
+camera_ip = "<camera-ip-address>"
+
+# Choose stream: /stream1 (higher quality) or /stream2 (lower latency/bitrate)
+rtsp_url = f"rtsp://{user}:{password}@{camera_ip}/stream2"
+print(f"Attempting to reach {rtsp_url}")
+
+cap = cv2.VideoCapture(rtsp_url)
+
+if not cap.isOpened():
+    print("Unable access the camera")
+    print("Check crendentials/IP and confirm the Jetson is on the same network as the camera.")
+else:
+    print("Camera accessed")
+
+while cap.isOpened:
+    ret, frame = cap.read()
+
+    if ret:
+        cv2.imshow("Captured Frame", frame)
+    else:
+        print("Error: Could not capture frame.")
+        break
+    if cv2.waitKey(1) & 0xFF == ord("q"):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
+```
+Ensure both the camera and the Jetson Orin Nano are on the same network; otherwise the Jetson will not be able to access the camera.
 ### Adafruit Sensor
 We have a sensor for air temperature, humidity, and light level. TBD setup instructions.
 ### Quality of Life Things
