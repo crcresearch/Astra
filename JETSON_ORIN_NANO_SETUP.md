@@ -30,10 +30,10 @@ If boot fails:
 - Use the boot menu to select the MicroSD as the default boot device.
 - From the boot menu, you can also confirm the firmware version is 36.+ if needed.
 ### Camera
-To set up the Tapo C120 for use with the Jetson Orin Nano, follow the instructions in the box and install the TP-Link Tapo app.  
-Create a Tapo account and follow the on-screen steps to add the camera.  
-After the camera is added, open it in the app, tap the settings icon (top-right), then go to "Advanced Settings" → "Camera Account" and create a camera account (this is different from your app account).  
-Find your camera's IP address in "Advanced Settings" → "Network Settings". While you're there, turn on "Static IP".
+1. To set up the Tapo C120 for use with the Jetson Orin Nano, follow the instructions in the box and install the TP-Link Tapo app.
+2. Create a Tapo account and follow the on-screen steps to add the camera.
+3. After the camera is added, open it in the app, tap the settings icon (top-right), then go to "Advanced Settings" → "Camera Account" and create a camera account (this is different from your app account).
+4. Find your camera's IP address in "Advanced Settings" → "Network Settings". While you're there, turn on "Static IP".
 #### Test Script
 Simple Python OpenCV script (run this after the [Python Virtual Environment Setup](#python-virtual-environment-setup))
 ```python
