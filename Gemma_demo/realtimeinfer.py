@@ -85,11 +85,13 @@ AUDIO_PROCESS_INTERVAL = 0.5
 MIN_AUDIO_ENERGY = 0.01
 
 # Video settings
-VIDEO_FPS_TARGET = 30
+VIDEO_FPS_TARGET = 3
 
 # Modality weights
 FACE_WEIGHT = 0.6
 AUDIO_WEIGHT = 0.4
+
+SAVE_FEEDBACK = False
 
 # Face emotions
 face_emotions = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
@@ -825,8 +827,7 @@ show_hr_details = True
 show_gaze_details = True
 
 # Frame timing
-#frame_time = 1.0 / VIDEO_FPS_TARGET
-frame_time = 1.0 / 3.0
+frame_time = 1.0 / VIDEO_FPS_TARGET
 last_frame_time = time.time()
 processing_frame_times = []
 
@@ -977,7 +978,8 @@ try:
                     "feedback": current_feedback
                 }
                 
-                save_feedback_entry(feedback_entry)
+                if SAVE_FEEDBACK:
+                    save_feedback_entry(feedback_entry)
                 
                 # Print summary
                 print(f"\n[{feedback_entry['timestamp']}]")
