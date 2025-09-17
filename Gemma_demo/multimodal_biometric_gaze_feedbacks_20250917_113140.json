@@ -1,0 +1,27 @@
+[
+{
+  "timestamp": "2025-09-17T11:33:03.607113",
+  "fused_emotion": "Fear",
+  "fused_confidence": 0.2883446216583252,
+  "face_emotion": "Fear",
+  "face_confidence": 0.2883446216583252,
+  "audio_emotion": null,
+  "audio_confidence": 0.0,
+  "heart_rate": 48.0,
+  "heart_rate_confidence": 0.47006545861693794,
+  "gaze_vector": [
+    0.9906977415084839,
+    -0.09048277884721756,
+    0.10164091736078262
+  ],
+  "face_weight": 1.0,
+  "audio_weight": 0.0,
+  "modalities_active": {
+    "face": true,
+    "audio": false,
+    "heart_rate": true,
+    "gaze": true
+  },
+  "feedback": "Mild concern detected. Preventive comfort measures and reassurance recommended. Patient avoiding eye contact - respect their comfort level."
+}
+]

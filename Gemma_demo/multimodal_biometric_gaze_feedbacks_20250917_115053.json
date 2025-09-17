@@ -1,0 +1,77 @@
+[
+{
+  "timestamp": "2025-09-17T11:52:14.922063",
+  "fused_emotion": "Sad",
+  "fused_confidence": 0.31331220269203186,
+  "face_emotion": "Sad",
+  "face_confidence": 0.31331220269203186,
+  "audio_emotion": null,
+  "audio_confidence": 0.0,
+  "heart_rate": null,
+  "heart_rate_confidence": 0.0,
+  "gaze_vector": [
+    0.9166416525840759,
+    -0.17458616197109222,
+    0.3595661520957947
+  ],
+  "face_weight": 1.0,
+  "audio_weight": 0.0,
+  "modalities_active": {
+    "face": true,
+    "audio": false,
+    "heart_rate": false,
+    "gaze": true
+  },
+  "feedback": "Patient appears down. Offer comfort, validate feelings, use visual supports. Patient avoiding eye contact - respect their comfort level."
+},
+{
+  "timestamp": "2025-09-17T11:53:15.214447",
+  "fused_emotion": "Sad",
+  "fused_confidence": 0.49831560254096985,
+  "face_emotion": "Sad",
+  "face_confidence": 0.49831560254096985,
+  "audio_emotion": null,
+  "audio_confidence": 0.0,
+  "heart_rate": null,
+  "heart_rate_confidence": 0.0,
+  "gaze_vector": [
+    0.8116008639335632,
+    -0.3217124342918396,
+    0.48765257000923157
+  ],
+  "face_weight": 1.0,
+  "audio_weight": 0.0,
+  "modalities_active": {
+    "face": true,
+    "audio": false,
+    "heart_rate": false,
+    "gaze": true
+  },
+  "feedback": "Patient appears down. Offer comfort, validate feelings, use visual supports. Patient avoiding eye contact - respect their comfort level."
+},
+{
+  "timestamp": "2025-09-17T11:54:15.331121",
+  "fused_emotion": "Happy",
+  "fused_confidence": 0.26732131838798523,
+  "face_emotion": "Happy",
+  "face_confidence": 0.26732131838798523,
+  "audio_emotion": null,
+  "audio_confidence": 0.0,
+  "heart_rate": null,
+  "heart_rate_confidence": 0.0,
+  "gaze_vector": [
+    0.8977112174034119,
+    -0.2859533131122589,
+    0.33517953753471375
+  ],
+  "face_weight": 1.0,
+  "audio_weight": 0.0,
+  "modalities_active": {
+    "face": true,
+    "audio": false,
+    "heart_rate": false,
+    "gaze": true
+  },
+  "feedback": "Positive state! Reinforce with preferred activities, social stories, or special interests. Patient avoiding eye contact - respect their comfort level."
+}
+]

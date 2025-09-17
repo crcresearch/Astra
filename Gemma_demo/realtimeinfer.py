@@ -258,7 +258,7 @@ class HeartRateProcessor:
         args = CompleteArgs()
         model = select_model(args)
         
-        checkpoint = torch.load(model_path, map_location=DEVICE)
+        checkpoint = torch.load(model_path, map_location=DEVICE, weights_only=False)
         model.load_state_dict(checkpoint['model_state_dict'])
         model.eval()
         model.to(DEVICE)
@@ -778,15 +778,24 @@ face_cascade = cv2.CascadeClassifier(
 
 # Open camera
 print("\nOpening camera...")
-cap = cv2.VideoCapture(0)
+pipeline = (
+    "rtspsrc location=rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2 latency=0 ! "
+    "rtph264depay ! h264parse ! nvv4l2decoder ! "
+    "nvvidconv ! video/x-raw, format=BGRx ! "
+    "videoconvert ! appsink"
+)
+
+cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+
+#cap = cv2.VideoCapture(0)
 if not cap.isOpened():
     print("Cannot open camera")
     detector.stop_audio()
     exit()
 
 # Set camera properties
-cap.set(cv2.CAP_PROP_FPS, VIDEO_FPS_TARGET)
-cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+#cap.set(cv2.CAP_PROP_FPS, VIDEO_FPS_TARGET)
+#cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
 print("Camera ready — press 'q' to quit")
 print("Press 'w' to adjust weights")
@@ -816,26 +825,33 @@ show_hr_details = True
 show_gaze_details = True
 
 # Frame timing
-frame_time = 1.0 / VIDEO_FPS_TARGET
+#frame_time = 1.0 / VIDEO_FPS_TARGET
+frame_time = 1.0 / 3.0
 last_frame_time = time.time()
+processing_frame_times = []
 
 # Create initial feedback file
 if not os.path.exists(feedback_filename):
     with open(feedback_filename, 'w') as f:
         f.write("[\n")
 
+frame_counter = 0
+
 try:
-    while True:
-        # Frame rate control
+    while True:        
+ 
+        ret, frame = cap.read()
+        if not ret:
+            continue
+
+        # Processing frame rate control
         current_time = time.time()
         if current_time - last_frame_time < frame_time:
             continue
         last_frame_time = current_time
-        
-        ret, frame = cap.read()
-        if not ret:
-            continue
-        
+
+        processing_frame_times.append(time.time())
+        #print(f"OG H x W: {frame.shape[:2]}")
         display = frame.copy()
         H, W = display.shape[:2]
         
@@ -1029,7 +1045,7 @@ try:
             cv2.putText(display, ln, (10, y0),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
         
-        cv2.imshow("Multimodal Biometric Monitor with Gaze", display)
+        cv2.imshow("Multimodal Biometric Monitor with Gaze", cv2.resize(display, (1080, 720)))
         
         # Handle keys
         key = cv2.waitKey(1) & 0xFF
@@ -1066,4 +1082,13 @@ finally:
         if hr_data:
             print(f"  Average HR: {np.mean(hr_data):.1f} BPM")
             print(f"  HR Range: {np.min(hr_data):.0f} - {np.max(hr_data):.0f} BPM")
+
+    frame_time_diffs = [processing_frame_times[i+1] - processing_frame_times[i] for i in range(len(processing_frame_times)-1)]
+
+    average_frame_time_diff = sum(frame_time_diffs) / len(frame_time_diffs)
+    frames_per_second = 1 / average_frame_time_diff
+
+    print(f"Average frame time difference: {average_frame_time_diff} seconds")
+    print(f"Frames per second: {frames_per_second} fps")
+
     print("\nClosed successfully!")

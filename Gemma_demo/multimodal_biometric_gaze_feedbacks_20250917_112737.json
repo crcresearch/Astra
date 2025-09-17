@@ -1,0 +1,27 @@
+[
+{
+  "timestamp": "2025-09-17T11:29:16.198958",
+  "fused_emotion": "Happy",
+  "fused_confidence": 0.3051219582557678,
+  "face_emotion": "Happy",
+  "face_confidence": 0.3051219582557678,
+  "audio_emotion": null,
+  "audio_confidence": 0.0,
+  "heart_rate": 84.00000000000001,
+  "heart_rate_confidence": 0.7475739078096245,
+  "gaze_vector": [
+    0.9303441643714905,
+    -0.1602565199136734,
+    0.32981452345848083
+  ],
+  "face_weight": 1.0,
+  "audio_weight": 0.0,
+  "modalities_active": {
+    "face": true,
+    "audio": false,
+    "heart_rate": true,
+    "gaze": true
+  },
+  "feedback": "Positive state! Reinforce with preferred activities, social stories, or special interests. Patient avoiding eye contact - respect their comfort level."
+}
+]

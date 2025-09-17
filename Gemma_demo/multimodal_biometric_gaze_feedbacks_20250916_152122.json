@@ -1,0 +1,52 @@
+[
+{
+  "timestamp": "2025-09-16T15:22:46.118713",
+  "fused_emotion": "Sad",
+  "fused_confidence": 0.36910244822502136,
+  "face_emotion": "Sad",
+  "face_confidence": 0.36910244822502136,
+  "audio_emotion": null,
+  "audio_confidence": 0.0,
+  "heart_rate": null,
+  "heart_rate_confidence": 0.0,
+  "gaze_vector": [
+    0.9007933735847473,
+    -0.11132647842168808,
+    0.4197353720664978
+  ],
+  "face_weight": 1.0,
+  "audio_weight": 0.0,
+  "modalities_active": {
+    "face": true,
+    "audio": false,
+    "heart_rate": false,
+    "gaze": true
+  },
+  "feedback": "Patient appears down. Offer comfort, validate feelings, use visual supports. Patient avoiding eye contact - respect their comfort level."
+},
+{
+  "timestamp": "2025-09-16T15:23:46.186808",
+  "fused_emotion": "Sad",
+  "fused_confidence": 0.518532395362854,
+  "face_emotion": "Sad",
+  "face_confidence": 0.518532395362854,
+  "audio_emotion": null,
+  "audio_confidence": 0.0,
+  "heart_rate": null,
+  "heart_rate_confidence": 0.0,
+  "gaze_vector": [
+    0.9288299083709717,
+    -0.1268109530210495,
+    0.34812942147254944
+  ],
+  "face_weight": 1.0,
+  "audio_weight": 0.0,
+  "modalities_active": {
+    "face": true,
+    "audio": false,
+    "heart_rate": false,
+    "gaze": true
+  },
+  "feedback": "Patient appears down. Offer comfort, validate feelings, use visual supports. Patient avoiding eye contact - respect their comfort level."
+}
+]

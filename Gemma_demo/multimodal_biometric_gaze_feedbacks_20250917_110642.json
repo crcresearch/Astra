@@ -1,0 +1,52 @@
+[
+{
+  "timestamp": "2025-09-17T11:07:57.559266",
+  "fused_emotion": "Sad",
+  "fused_confidence": 0.2704234719276428,
+  "face_emotion": "Sad",
+  "face_confidence": 0.2704234719276428,
+  "audio_emotion": null,
+  "audio_confidence": 0.0,
+  "heart_rate": null,
+  "heart_rate_confidence": 0.0,
+  "gaze_vector": [
+    0.8460341691970825,
+    -0.19520457088947296,
+    0.4961061477661133
+  ],
+  "face_weight": 1.0,
+  "audio_weight": 0.0,
+  "modalities_active": {
+    "face": true,
+    "audio": false,
+    "heart_rate": false,
+    "gaze": true
+  },
+  "feedback": "Patient appears down. Offer comfort, validate feelings, use visual supports. Patient avoiding eye contact - respect their comfort level."
+},
+{
+  "timestamp": "2025-09-17T11:08:57.609342",
+  "fused_emotion": "Fear",
+  "fused_confidence": 0.434357225894928,
+  "face_emotion": "Fear",
+  "face_confidence": 0.434357225894928,
+  "audio_emotion": null,
+  "audio_confidence": 0.0,
+  "heart_rate": null,
+  "heart_rate_confidence": 0.0,
+  "gaze_vector": [
+    0.9218102097511292,
+    0.0029833726584911346,
+    0.3876299262046814
+  ],
+  "face_weight": 1.0,
+  "audio_weight": 0.0,
+  "modalities_active": {
+    "face": true,
+    "audio": false,
+    "heart_rate": false,
+    "gaze": true
+  },
+  "feedback": "Patient fearful. Provide comfort items, use reassuring tone, maintain familiar routines. Patient avoiding eye contact - respect their comfort level."
+}
+]
