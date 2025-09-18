@@ -75,7 +75,7 @@ Ensure both the camera and the Jetson Orin Nano are on the same network; otherwi
 We have an Adafruit Feather nRF52840 microcontroller which includes sensors for air temperature, humidity, and light level. To connect to this to the Jetson, simply use a USB to USB-C connector. 
 
 In the ardino environment, save this code:
-/* MODIFIED VERSION
+[/* MODIFIED VERSION
  * Edge Impulse ingestion SDK
  * Copyright (c) 2022 EdgeImpulse Inc.
  *
@@ -604,7 +604,7 @@ static void send_sensor_data(){
 
 #if !defined(EI_CLASSIFIER_SENSOR) || EI_CLASSIFIER_SENSOR != EI_CLASSIFIER_SENSOR_MICROPHONE
 #error "Invalid model for current sensor."
-#endif
+#endif]
 
 ### Quality of Life Things
 #### Firefox installation
