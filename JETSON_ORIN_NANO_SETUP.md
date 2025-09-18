@@ -837,7 +837,7 @@ Disable swap memory:
 ```
 Restore default 4G of swap memory
 ```bash
-swap4g-on.sh
+./swap4g-on.sh
 ```
 The swap memory is 4G by default and the change to the swap memory is not permanent. A reboot will reset the swap memory configuration.
 ### Ollama Installation
