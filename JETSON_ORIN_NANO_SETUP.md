@@ -706,7 +706,6 @@ After this inital setup, you should be able to transmit sensor data from Arduino
 2. In the terminal, run
   ```bash
   python3 listener.py
-```
       - Note that the code takes 30 seconds to "warm up" due to the MOX gas sensor attached to the microcontroller.
       - After 30 seconds, the wake word "VOICE, start" should begin data transmission.
       - Everything that would be showing up in the Arduino serial monitor is now being transmitted to the Python code and should be showing up in the terminal.
