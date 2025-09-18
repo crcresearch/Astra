@@ -701,16 +701,16 @@ The port that these lines return is the port that you should copy and paste into
 
 After this inital setup, you should be able to transmit sensor data from Arduino into Python in real time. To do so, follow these steps:
 1. Upload the **adafruit_with_ens_start_stop_final** code to the microcontroller.
-- Note that to put the microcontroller into bootloader mode, you will need to press the rest button twice. The large light should go from red to green.
-- DO NOT open the serial monitor.
-3. In the terminal, run
+    - Note that to put the microcontroller into bootloader mode, you will need to press the rest button twice. The large light should go from red to green.
+    - DO NOT open the serial monitor.
+2. In the terminal, run
   ```
   bash python3 listener.py
   ```
-  - Note that the code takes 30 seconds to "warm up" due to the MOX gas sensor attached to the microcontroller.
-  - After 30 seconds, the wake word "VOICE, start" should begin data transmission.
-  - Everything that would be showing up in the Arduino serial monitor is now being transmitted to the Python code and should be showing up in the terminal.
-  - The phrase "VOICE, stop" should end data transmission. 
+      - Note that the code takes 30 seconds to "warm up" due to the MOX gas sensor attached to the microcontroller.
+      - After 30 seconds, the wake word "VOICE, start" should begin data transmission.
+      - Everything that would be showing up in the Arduino serial monitor is now being transmitted to the Python code and should be showing up in the terminal.
+      - The phrase "VOICE, stop" should end data transmission. 
 
 ### Quality of Life Things
 #### Firefox installation
