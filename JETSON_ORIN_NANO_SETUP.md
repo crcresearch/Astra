@@ -72,9 +72,13 @@ cv2.destroyAllWindows()
 ```
 Ensure both the camera and the Jetson Orin Nano are on the same network; otherwise the Jetson will not be able to access the camera.
 ### Adafruit Sensor
-We have an Adafruit Feather nRF52840 microcontroller which includes sensors for air temperature, humidity, and light level. To connect to this to the Jetson, simply use a USB to USB-C connector. 
+We have an Adafruit Feather nRF52840 microcontroller which includes sensors for air temperature, humidity, and light level. To connect to this to the Jetson, simply use a USB to USB-C connector. The Adafruit ENS160 MOX Gas Sensor is also connected to the microcontroller through pins. In the future, these pins and the pinholes on the microcontroller should be soldered together, but currently, follow this setup when connecting the two. 
+- Board 3V to sensor VIN (red wire)
+- Board GND to sensor GND (black wire)
+- Board SCL to sensor SCL (yellow wire)
+- Board SDA to sensor SDA (blue wire)
 
-In the ardino environment, save this code:
+In the ardino environment, save this code with the name **adafruit_with_ens_start_stop_final**:
 ```bash
 /* MODIFIED VERSION
  * Edge Impulse ingestion SDK
@@ -557,49 +561,7 @@ static void send_sensor_data(){
   Serial.print(aqi);              Serial.print(',');
   Serial.print(tvoc);             Serial.print(',');
   Serial.println(eco2);
-  /*
-  Serial.println("\nFeather Sense + ENS160 Sensor Information");
-  Serial.println("---------------------------------------------");
-  Serial.print("Red: ");
-  Serial.print(r);
-  Serial.print(" Green: ");
-  Serial.print(g);
-  Serial.print(" Blue: ");
-  Serial.print(b);
-  Serial.print(" Clear: ");
-  Serial.println(c);
-  Serial.print("Temperature: ");
-  Serial.print(temperature);
-  Serial.println(" C");
-  Serial.print("Humidity: ");
-  Serial.print(humidity);
-  Serial.println(" %");
-  Serial.print("Acceleration Z: ");
-  Serial.print(accel_z);
-  Serial.println(" m/s^2");
- 
-  // Print ENS160 air quality data
-  Serial.print("Air Quality Index (AQI): ");
-  if (aqi == 255 || aqi == 999) {
-    Serial.println("ERROR");
-  } else {
-    Serial.println(aqi);
-  }
-  Serial.print("TVOC: ");
-  if (tvoc == 65535) {
-    Serial.println("ERROR ppb");
-  } else {
-    Serial.print(tvoc);
-    Serial.println(" ppb");
-  }
-  Serial.print("eCO2: ");
-  if (eco2 == 65535) {
-    Serial.println("ERROR ppm");
-  } else {
-    Serial.print(eco2);
-    Serial.println(" ppm");
-  }*/
- 
+
   delay(50);
 }
 
@@ -607,6 +569,139 @@ static void send_sensor_data(){
 #error "Invalid model for current sensor."
 #endif
 ```
+Create a python file named **process_data.py** with this code:
+``` bash
+# process_data.py
+import sys, csv
+
+out = csv.writer(open("sensor_log.csv", "w", newline=""))
+out.writerow(["t_ms","r","g","b","c","temperatureC","humidityPct","accelZ_mps2","aqi","tvoc_ppb","eco2_ppm"])
+print("process_data.py: READY", flush=True)
+
+try:
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+
+        # ignore headers or chatter
+        if line.startswith("HEADER,"):
+            continue
+        if not line.startswith("DATA,"):
+            continue
+
+        fields = line.split(",", maxsplit=12)[1:]  # everything after "DATA,"
+        # Expecting 11 fields based on our CSV
+        if len(fields) != 11:
+            continue
+
+        try:
+            t_ms      = int(fields[0])
+            r         = int(fields[1])
+            g         = int(fields[2])
+            b         = int(fields[3])
+            c         = int(fields[4])
+            temperature    = float(fields[5])
+            humidity   = float(fields[6])
+            accel_z   = float(fields[7])
+            aqi       = int(fields[8])
+            tvoc  = int(fields[9])
+            eco2  = int(fields[10])
+        except ValueError:
+            continue
+
+        # Write to CSV (or do your own processing instead)
+        out.writerow([t_ms,r,g,b,c,temperature,humidity,accel_z,aqi,tvoc,eco2])
+
+        # Example real-time print
+        print(f"T={t_ms}ms  Temp={temperature:.2f}C  RH={humidity:.1f}%  eCO2={eco2}ppm  TVOC={tvoc}ppb", flush=True)
+
+except KeyboardInterrupt:
+    pass
+
+print("process_data.py: EXIT", flush=True)
+```
+Finally, in the same folder, create a python file called **listener.py** with this code:
+```bash
+# listener.py
+import serial, subprocess, sys, signal
+
+PORT = "/dev/ttyACM0"   # Linux/Jetson example; Windows like "COM3"; macOS like "/dev/tty.usbmodemXXXX"
+BAUD = 115200
+
+proc = None  # subprocess for process_data.py
+
+def start_processing():
+    global proc
+    if proc is None or proc.poll() is not None:
+        # Launch process_data.py and open a text pipe for input
+        proc = subprocess.Popen(
+            [sys.executable, "process_data.py"],
+            stdin=subprocess.PIPE, text=True, bufsize=1
+        )
+        print("Started process_data.py")
+
+def stop_processing():
+    global proc
+    if proc and proc.poll() is None:
+        print("Stopping process_data.py ...")
+        try:
+            # Close its stdin so it can exit gracefully
+            proc.stdin.close()
+        except Exception:
+            pass
+        # Politely ask it to stop
+        proc.send_signal(signal.SIGINT)
+
+def main():
+    global proc
+    print(f"Opening serial {PORT} @ {BAUD} ...")
+    with serial.Serial(PORT, BAUD, timeout=1) as ser:
+        print(f"Listening on {PORT} ...")
+        while True:
+            raw = ser.readline()
+            if not raw:
+                continue
+            line = raw.decode(errors="ignore").strip()
+
+            if line == "START":
+                print("[SERIAL] START")
+                start_processing()
+            elif line == "STOP":
+                print("[SERIAL] STOP")
+                stop_processing()
+                proc = None
+            elif line.startswith("DATA,"):
+                # Forward DATA lines only if the processor is running
+                if proc and proc.poll() is None:
+                    try:
+                        proc.stdin.write(line + "\n")
+                        proc.stdin.flush()
+                    except BrokenPipeError:
+                        # Child exited; drop data until next START
+                        proc = None
+                # (Optionally print a dot or echo for debugging)
+            else:
+                # Unknown line; ignore or log
+                pass
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        stop_processing()
+        print("\nListener exiting.")
+```
+Note that the PORT may be different depending on the device. To determine what port is correct, run these two lines in the terminal:
+```bash
+sudo dmesg | grep -i tty
+ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null
+```
+The port that these lines return is the port that you should copy and paste into the PORT variable of the listener.py script.
+
+After this inital setup, you should be able to transmit sensor data from Arduino into Python in real time. To do so, follow these steps:
+    1) Upload the **adafruit_with_ens_start_stop_final** code to the microcontroller. Note that to put the microcontroller into bootloader mode you will need to press the rest button twice. The large light should go from red to green. DO NOT open the serial monitor.
+    2) In the terminal, run **python3 listener.py**. Note that the code takes 30 seconds to "warm up" due to the MOX gas sensor attached to the microcontroller. The wake word "VOICE, start" should begin data transmission. Everything that would be showing up in the Arduino serial monitor is now being transmitted to the python code and should be showing up in the terminal. The phrase "VOICE, stop" should end data transmission. 
 
 ### Quality of Life Things
 #### Firefox installation
