@@ -1075,7 +1075,8 @@ finally:
     detector.stop_audio()
     cap.release()
     cv2.destroyAllWindows()
-    finalize_feedback_file()
+    if SAVE_FEEDBACK:
+        finalize_feedback_file()
     
     # Print session summary
     print("\n📊 Session Summary:")
