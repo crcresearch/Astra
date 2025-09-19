@@ -7,6 +7,7 @@ class CameraStream:
     :type pipeline: str
     """
     def __init__(self, pipeline: str, gstreamer: bool = True):
+        self._using_gstreamer = gstreamer
         if gstreamer:
             self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
         else:
@@ -14,11 +15,13 @@ class CameraStream:
         if not self.cap.isOpened():
             raise RuntimeError(f"Failed to open video stream with pipeline: {pipeline}")
 
-        # Try to reduce internal buffering if backend supports it
-        try:
-            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        except Exception as e:
-            print(f"Cannot set buffer size to 1: {e}")
+        # Try to reduce internal buffering if backend supports it.
+        # Note: GStreamer backend does not support CAP_PROP_BUFFERSIZE and may warn/fail.
+        if not self._using_gstreamer:
+            try:
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            except Exception as e:
+                print(f"Cannot set buffer size to 1: {e}")
 
         self.frame = None
         self.lock = threading.Lock()
@@ -106,7 +109,7 @@ if __name__ == "__main__":
     # Recommended:
     pipeline = "rtspsrc location=rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2 latency=60 protocols=udp drop-on-latency=true ! rtph264depay ! h264parse config-interval=-1 ! nvv4l2decoder ! nvvidconv ! video/x-raw, format=BGR ! appsink drop=true max-buffers=1 sync=false"
     #pipeline = "rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2"
-    camera = CameraStream(pipeline, gstreamer=False)
+    camera = CameraStream(pipeline, gstreamer=True)
     camera.start()
     camera.wait_for_first_frame()
     while True:
