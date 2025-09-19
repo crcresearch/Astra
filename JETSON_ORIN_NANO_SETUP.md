@@ -1119,9 +1119,9 @@ pip install ml-dtypes==0.5.3
 ### OpenCV
 We can make use of the Jetson AI Lab's pre-built wheel:
 ```bash
-pip install opencv-contrib-python --no-dep --index-url https://pypi.jetson-ai-lab.io/jp6/cu126
+pip install opencv-contrib-python --no-deps --index-url https://pypi.jetson-ai-lab.io/jp6/cu126
 ```
-The `--no-dep` flag avoids changing your numpy version.  
+The `--no-deps` flag avoids changing your numpy version.  
 Confirm that GStreamer and v4l/v4l2 are enabled:
 ```bash
 python -c "import cv2; print(cv2.getBuildInformation())"
