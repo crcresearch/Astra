@@ -102,13 +102,15 @@ class CameraStream:
 
 # Test the camera stream
 if __name__ == "__main__":
-    #pipeline = "rtspsrc location=rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2 latency=0 ! nvgstreamer src=nvgstreamer ! video/x-raw(memory:NVMM), width=1920, height=1080, format=I420, framerate=30/1 ! nvvidconv ! video/x-raw, format=BGRx ! videoconvert ! appsink"
-    #pipeline = "rtspsrc location=rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2 latency=0 ! rtph264depay ! h264parse ! nvv4l2decoder ! nvvidconv ! video/x-raw, format=BGRx ! videoconvert ! appsink"
-    # Pipeline straight from Jetson forums: https://forums.developer.nvidia.com/t/doesnt-work-nvv4l2decoder-for-decoding-rtsp-in-gstreamer-opencv/140321
-    #pipeline = "rtspsrc location=rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2 ! rtph264depay ! h264parse ! nvv4l2decoder ! nvvidconv ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw,format=BGR ! appsink "
-    # Recommended:
-    pipeline = "rtspsrc location=rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2 latency=60 protocols=udp drop-on-latency=true ! rtph264depay ! h264parse config-interval=-1 ! nvv4l2decoder ! nvvidconv ! video/x-raw, format=BGR ! appsink drop=true max-buffers=1 sync=false"
     #pipeline = "rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2"
+    # We may need to add "rtspsrc do-rtsp-keep-alive=true" to the pipeline
+    pipeline = (
+            "rtspsrc location=rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2 protocols=tcp latency=60 ! "
+            "rtph264depay ! h264parse ! nvv4l2decoder ! "
+            "nvvidconv ! video/x-raw, format=BGRx ! "
+            "videoconvert ! appsink sync=false max-buffers=1 drop=true"
+            )
+
     camera = CameraStream(pipeline, gstreamer=True)
     camera.start()
     camera.wait_for_first_frame()
