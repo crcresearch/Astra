@@ -2,13 +2,8 @@ import time
 import random
 import numpy as np
 from camera_stream import CameraStream
-
-# Dummy classes for testing
-class MicrophoneStream:
-    pass
-
-class SensorStream:
-    pass
+from microphone_stream import MicrophoneStream
+from sensor_array_stream import SensorArrayStream
 
 class BaseDevice:
     """Abstract base class for any recording hardware."""
@@ -66,7 +61,7 @@ class MicrophoneDevice(BaseDevice):
 
 
 class SensorDevice(BaseDevice):
-    def __init__(self, sensor_stream: SensorStream):
+    def __init__(self, sensor_stream: SensorArrayStream):
         self.sensor_stream = sensor_stream
 
     def start(self):
@@ -90,8 +85,18 @@ class SensorDevice(BaseDevice):
 
 class DataAcquisition:
     """Orchestrator for all recording devices."""
-    def __init__(self, devices=None, voice_activation=True):
-        self.devices = devices or []  # list of BaseDevice subclasses
+    def __init__(self, streams=None, voice_activation=True):
+        # Initialize devices from streams
+        self.devices = []
+        for stream in streams:
+            if isinstance(stream, CameraStream):
+                self.devices.append(CameraDevice(stream))
+            elif isinstance(stream, MicrophoneStream):
+                self.devices.append(MicrophoneDevice(stream))
+            elif isinstance(stream, SensorArrayStream):
+                self.devices.append(SensorDevice(stream))
+            else:
+                raise ValueError(f"Unsupported stream type: {type(stream)}")
         self.voice_activation = voice_activation
         self.is_recording = False
 
@@ -149,12 +154,12 @@ if __name__ == "__main__":
             "nvvidconv ! video/x-raw, format=BGRx ! "
             "videoconvert ! appsink sync=false max-buffers=1 drop=true"
             )
+    
     camera_stream = CameraStream(pipeline, gstreamer=True)
-    cam = CameraDevice(camera_stream)
-    mic = MicrophoneDevice(MicrophoneStream())
-    sensor_array = SensorDevice(SensorStream())
+    microphone_stream = MicrophoneStream()
+    sensor_array_stream = SensorArrayStream()
 
-    daq = DataAcquisition(devices=[cam, mic, sensor_array])
+    daq = DataAcquisition(streams=[camera_stream, microphone_stream, sensor_array_stream])
 
     daq.start()
 

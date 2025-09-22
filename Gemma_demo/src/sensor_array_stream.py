@@ -1,0 +1,2 @@
+class SensorArrayStream:
+    pass

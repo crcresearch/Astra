@@ -1,0 +1,13 @@
+camera:
+  username: "voice4pimd"
+  password: "voice4pimd"
+  ip: "10.12.130.50"
+  stream: "stream2"
+  gstreamer_pipeline: "protocols=tcp latency=60 ! rtph264depay ! h264parse ! nvv4l2decoder ! nvvidconv ! video/x-raw, format=BGRx ! videoconvert ! appsink sync=false max-buffers=1 drop=true"
+  gstreamer: true
+
+microphone:
+  pipeline: "default"
+
+sensor_array:
+  pipeline: "default"
