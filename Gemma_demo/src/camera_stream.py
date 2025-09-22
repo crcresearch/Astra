@@ -41,6 +41,7 @@ class CameraStream:
         self._first_frame_event.clear()
         self._thread = threading.Thread(target=self.update, daemon=True)
         self._thread.start()
+        self._wait_for_first_frame()
         return self
 
     def update(self):
@@ -63,10 +64,13 @@ class CameraStream:
         :return: The latest frame from the camera stream or None if there is no frame.
         :rtype: numpy.ndarray or None
         """
+        if not self.running:
+            print("[ERROR] Camera stream is not running")
+            return None
         with self.lock:
             return None if self.frame is None else self.frame.copy()
 
-    def wait_for_first_frame(self, timeout: float = 2.0) -> bool:
+    def _wait_for_first_frame(self, timeout: float = 2.0) -> bool:
         """Block until the first frame is available or timeout elapses.
 
         :param timeout: Seconds to wait at most.
@@ -113,7 +117,6 @@ if __name__ == "__main__":
 
     camera = CameraStream(pipeline, gstreamer=True)
     camera.start()
-    camera.wait_for_first_frame()
     while True:
         frame = camera.read()
         if frame is not None:
