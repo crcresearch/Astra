@@ -18,7 +18,7 @@ class CameraStream(BaseStream):
             raise RuntimeError(f"Failed to open video stream with pipeline: {pipeline}")
 
         # Try to reduce internal buffering if backend supports it.
-        # Note: GStreamer backend does not support CAP_PROP_BUFFERSIZE and may warn/fail.
+        # Note: GStreamer backend does not support CAP_PROP_BUFFERSIZE.
         if not self._using_gstreamer:
             try:
                 self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -41,12 +41,12 @@ class CameraStream(BaseStream):
             return self
         self.running = True
         self._first_frame_event.clear()
-        self._thread = threading.Thread(target=self.update, daemon=True)
+        self._thread = threading.Thread(target=self._update, daemon=True)
         self._thread.start()
         self._wait_for_first_frame()
         return self
 
-    def update(self):
+    def _update(self):
         """Update the camera stream.
         """
         while self.running:
@@ -89,7 +89,7 @@ class CameraStream(BaseStream):
         self.running = False
         # Join thread to ensure clean shutdown
         if self._thread is not None and self._thread.is_alive():
-            self._thread.join(timeout=10.0)
+            self._thread.join(timeout=3.0)
         self._thread = None
         self.cap.release()
 

@@ -188,19 +188,19 @@ class DataAcquisition:
 
 # Example usage
 if __name__ == "__main__":
-    pipeline = "rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2"
-    #pipeline = (
-    #        "rtspsrc location=rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2 protocols=tcp latency=60 ! "
-    #        "rtph264depay ! h264parse ! nvv4l2decoder ! "
-    #        "nvvidconv ! video/x-raw, format=BGRx ! "
-    #        "videoconvert ! appsink sync=false max-buffers=1 drop=true"
-    #        )
+    #pipeline = "rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2"
+    pipeline = (
+            "rtspsrc location=rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2 protocols=tcp latency=60 ! "
+            "rtph264depay ! h264parse ! nvv4l2decoder ! "
+            "nvvidconv ! video/x-raw, format=BGRx ! "
+            "videoconvert ! appsink sync=false max-buffers=1 drop=true"
+            )
     
-    #camera_stream = CameraStream(pipeline, gstreamer=False)
+    camera_stream = CameraStream(pipeline, gstreamer=True)
     microphone_stream = MicrophoneStream()
     sensor_array_stream = SensorArrayStream()
 
-    daq = DataAcquisition(streams=[microphone_stream, sensor_array_stream])
+    daq = DataAcquisition(streams=[camera_stream, microphone_stream, sensor_array_stream])
 
     # Start listening for voice activation
     daq.start()

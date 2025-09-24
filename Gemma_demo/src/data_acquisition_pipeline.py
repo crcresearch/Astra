@@ -19,12 +19,12 @@ camera_pipeline = f"rtspsrc location=rtsp://{config['camera']['username']}:{conf
 #camera_pipeline = f"rtsp://{config['camera']['username']}:{config['camera']['password']}@{config['camera']['ip']}/{config['camera']['stream']}"
 
 # Load in hardware streamers
-#camera_stream = CameraStream(camera_pipeline, gstreamer=config['camera']['gstreamer'])
+camera_stream = CameraStream(camera_pipeline, gstreamer=config['camera']['gstreamer'])
 microphone_stream = MicrophoneStream()
 sensor_array_stream = SensorArrayStream()
 
 # Load in data acquisition pipeline
-daq = DataAcquisition(streams=[microphone_stream, sensor_array_stream], voice_activation=True)
+daq = DataAcquisition(streams=[camera_stream, microphone_stream, sensor_array_stream], voice_activation=True)
 
 # Start data acquisition pipeline
 daq.start() # If voice activation is enabled, it will wait for voice activation. Otherwise, it will start all streams.
