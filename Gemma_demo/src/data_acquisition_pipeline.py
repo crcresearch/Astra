@@ -19,22 +19,34 @@ camera_pipeline = f"rtspsrc location=rtsp://{config['camera']['username']}:{conf
 #camera_pipeline = f"rtsp://{config['camera']['username']}:{config['camera']['password']}@{config['camera']['ip']}/{config['camera']['stream']}"
 
 # Load in hardware streamers
-camera_stream = CameraStream(camera_pipeline, gstreamer=config['camera']['gstreamer'])
+#camera_stream = CameraStream(camera_pipeline, gstreamer=config['camera']['gstreamer'])
 microphone_stream = MicrophoneStream()
 sensor_array_stream = SensorArrayStream()
 
 # Load in data acquisition pipeline
-daq = DataAcquisition(streams=[camera_stream, microphone_stream, sensor_array_stream])
+daq = DataAcquisition(streams=[microphone_stream, sensor_array_stream], voice_activation=True)
 
 # Start data acquisition pipeline
-daq.start()
+daq.start() # If voice activation is enabled, it will wait for voice activation. Otherwise, it will start all streams.
 
-# Collect data
+# Simulate voice activation
+daq.simulate_voice_command("start")
+
+# Allow time for the streams to start
+time.sleep(5)
+
+# On voice activation, collect data
 for _ in range(3):
     #sample = daq.collect_data()
     sample = daq.simulate_collect_data()
     print("Sample:", sample)
     time.sleep(1)
 
-# Stop data acquisition pipeline
-daq.stop()
+# Simulate voice command to stop
+daq.simulate_voice_command("stop")
+
+# Shutdown voice listener
+daq.shutdown_voice_listener()
+
+# If you are not using the voice listener, you can stop the data acquisition pipeline manually with:
+#daq.stop()

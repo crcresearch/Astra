@@ -1,6 +1,8 @@
 import cv2, threading, time
+import numpy as np
+from stream import BaseStream
 
-class CameraStream:
+class CameraStream(BaseStream):
     """Class to handle the camera stream to grab the latest frame from the camera stream.
 
     :param pipeline: The pipeline to use to open the camera stream.
@@ -87,9 +89,12 @@ class CameraStream:
         self.running = False
         # Join thread to ensure clean shutdown
         if self._thread is not None and self._thread.is_alive():
-            self._thread.join(timeout=1.0)
+            self._thread.join(timeout=10.0)
         self._thread = None
         self.cap.release()
+
+    def simulate_read(self):
+        return np.random.randint(0, 255, (640, 360, 3), dtype=np.uint8)
 
     # Context manager support
     def __enter__(self):
