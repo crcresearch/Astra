@@ -96,14 +96,23 @@ class MicrophoneStream(BaseStream):
         if caps is None:
             caps = pad.query_caps(None)
         if caps is None or caps.get_size() == 0:
+            print(f"[MIC] Pad added but no caps available: {pad.get_name()}")
             return
         structure = caps.get_structure(0)
         media_type = structure.get_name() if structure is not None else ""
+        print(f"[MIC] Pad added: {pad.get_name()}, media_type: {media_type}")
         if not media_type.startswith("audio/"):
+            print(f"[MIC] Skipping non-audio pad: {media_type}")
             return
         sink_pad = self.convert.get_static_pad("sink")
         if not sink_pad.is_linked():
-            pad.link(sink_pad)
+            link_result = pad.link(sink_pad)
+            if link_result == Gst.PadLinkReturn.OK:
+                print(f"[MIC] Successfully linked audio pad")
+            else:
+                print(f"[MIC] Failed to link audio pad: {link_result}")
+        else:
+            print(f"[MIC] Audio converter sink already linked")
 
     def start(self):
         if self.running:
@@ -139,6 +148,7 @@ class MicrophoneStream(BaseStream):
         timeout_ns = int(self._timeout_s * Gst.SECOND)
         sample = self.appsink.emit("try-pull-sample", timeout_ns)
         if sample is None:
+            print(f"[MIC] No sample available after {self._timeout_s}s timeout")
             return None
         buffer = sample.get_buffer()
         if buffer is None:
@@ -192,12 +202,28 @@ class MicrophoneStream(BaseStream):
                 break
 
 if __name__ == "__main__":
+    import time
     rtsp_uri = "rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2"
-    mic = MicrophoneStream(rtsp_uri)
+    # Use longer timeout for initial connection
+    mic = MicrophoneStream(rtsp_uri, read_timeout_s=2.0)
+    print(f"[MIC] Starting stream: {rtsp_uri}")
     mic.start()
-    # Grab single sample
-    audio_data = mic.read()
-    print(f"Audio data shape: {audio_data.shape}")
-    print(f"Audio data type: {audio_data.dtype}")
-    print(f"Audio data: {audio_data}")
+    
+    # Wait a moment for stream to stabilize
+    print("[MIC] Waiting for stream to stabilize...")
+    time.sleep(3)
+    
+    # Try multiple reads
+    for i in range(5):
+        print(f"[MIC] Attempt {i+1}/5")
+        audio_data = mic.read()
+        if audio_data is not None:
+            print(f"Audio data shape: {audio_data.shape}")
+            print(f"Audio data type: {audio_data.dtype}")
+            print(f"Audio data range: [{audio_data.min():.3f}, {audio_data.max():.3f}]")
+            break
+        time.sleep(0.5)
+    else:
+        print("[MIC] No audio data received after 5 attempts")
+    
     mic.stop()
