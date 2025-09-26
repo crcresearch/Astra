@@ -158,7 +158,7 @@ if __name__ == "__main__":
         "audio/x-raw,format=F32LE,channels=1,rate=8000 ! "
         "appsink name=appsink sync=false max-buffers=10 drop=true"
     )
-    mic = MicrophoneStream(pipeline, read_timeout_s=2.0)
+    mic = MicrophoneStream(pipeline, read_timeout_s=2.0, channels=1)
     print(f"[MIC] Starting stream")
     mic.start()
     print("[MIC] Waiting for stream to stabilize...")

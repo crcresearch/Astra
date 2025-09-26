@@ -26,7 +26,7 @@ mic_pipeline = (
 
 # Load in hardware streamers
 camera_stream = CameraStream(camera_pipeline, gstreamer=config['camera']['gstreamer'])
-microphone_stream = MicrophoneStream(mic_pipeline)
+microphone_stream = MicrophoneStream(mic_pipeline, channels=config['microphone']['channels'])
 sensor_array_stream = SensorArrayStream()
 
 # Load in data acquisition pipeline
