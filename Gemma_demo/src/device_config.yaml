@@ -7,7 +7,7 @@ camera:
   gstreamer: true
 
 microphone:
-  gstreamer_pipeline: "latency=60 do-rtsp-keep-alive=true ! application/x-rtp,media=audio,encoding-name=PCMA,clock-rate=8000 ! rtppcmadepay ! alawdec ! audioconvert ! audioresample ! audio/x-raw,format=F32LE,channels=1,rate=8000 ! appsink name=appsink sync=false max-buffers=10 drop=true"
+  gstreamer_pipeline: "latency=60 do-rtsp-keep-alive=true ! application/x-rtp,media=audio,encoding-name=PCMA,clock-rate=8000 ! rtppcmadepay ! alawdec ! audioconvert ! audioresample ! audio/x-raw,format=F32LE,channels=1,rate=8000 ! appsink name=appsink sync=false max-buffers=1 drop=true"
   channels: 1 # Ensure this matches the pipeline's channel count
 
 sensor_array:

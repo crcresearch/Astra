@@ -48,6 +48,11 @@ class MicrophoneStream(BaseStream):
         self.running = False
 
     def start(self):
+        """Start the microphone stream.
+
+        :return: The microphone stream.
+        :rtype: MicrophoneStream
+        """
         if self.running:
             return self
         state_ret = self.pipeline.set_state(Gst.State.PLAYING)
@@ -74,11 +79,15 @@ class MicrophoneStream(BaseStream):
                             self._channels = int(structure.get_value("channels"))
                             print(f"[MIC] Channel count determined from pipeline: {self._channels}")
                         except Exception:
-                            print("[MIC][WARNING] Could not determine channel count from pipeline, defaulting to 1")
-                            self._channels = 1
+                            self._channels = None
+            if self._channels is None:
+                print("[MIC][WARNING] Could not determine channel count from pipeline, defaulting to 1")
+                self._channels = 1
         return self
 
     def stop(self):
+        """Stop the microphone stream.
+        """
         if not self.running:
             return
         self.running = False
@@ -87,11 +96,17 @@ class MicrophoneStream(BaseStream):
         self._poll_bus_errors(non_blocking=True)
 
     def read(self):
+        """Read a sample from the microphone stream.
+
+        :return: The the captured audio sample or None if no sample is available.
+        :rtype: numpy.ndarray or None
+        """
         if not self.running:
             print("[MIC] Microphone stream is not running")
             return None
         # Check for errors or EOS before pulling a sample
         self._poll_bus_errors(non_blocking=True)
+        # Get timeout in nanoseconds for the try-pull-sample call
         timeout_ns = int(self._timeout_s * Gst.SECOND)
         sample = self.appsink.emit("try-pull-sample", timeout_ns)
         if sample is None:
@@ -115,18 +130,19 @@ class MicrophoneStream(BaseStream):
             buffer.unmap(map_info)
     
     def simulate_read(self):
+        """Simulate reading a sample from the microphone stream.
+
+        :return: A simulated audio sample.
+        :rtype: numpy.ndarray
+        """
         return np.random.uniform(-1.0, 1.0, (1024,)).astype(np.float32)
 
-    # Context manager support for parity with CameraStream
-    def __enter__(self):
-        return self.start()
-
-    def __exit__(self, exc_type, exc, tb):
-        self.stop()
-        return False
-
-    # Internal helpers
     def _poll_bus_errors(self, non_blocking: bool = True):
+        """Poll the message bus for errors keeping the queue empty.
+
+        :param non_blocking: Whether to poll the bus non-blocking, defaults to True
+        :type non_blocking: bool, optional
+        """
         if not hasattr(self, "_bus") or self._bus is None:
             return
         flags = Gst.MessageType.ERROR | Gst.MessageType.EOS
@@ -147,6 +163,18 @@ class MicrophoneStream(BaseStream):
                 self.running = False
                 self.pipeline.set_state(Gst.State.NULL)
                 break
+    
+    # Context manager support
+    def __enter__(self):
+        """Upon entering the context manager, start the microphone stream.
+        """
+        return self.start()
+
+    def __exit__(self, exc_type, exc, tb):
+        """Upon exiting the context manager, stop the microphone stream.
+        """
+        self.stop()
+        return False
 
 if __name__ == "__main__":
     import time
@@ -159,12 +187,13 @@ if __name__ == "__main__":
         "appsink name=appsink sync=false max-buffers=10 drop=true"
     )
     mic = MicrophoneStream(pipeline, read_timeout_s=2.0, channels=1)
-    print(f"[MIC] Starting stream")
+    print(f"Starting stream")
     mic.start()
-    print("[MIC] Waiting for stream to stabilize...")
+    print("Waiting for stream to stabilize...")
     time.sleep(3)
+    print("Make some noise!")
     for i in range(5):
-        print(f"[MIC] Attempt {i+1}/5")
+        print(f"Attempt {i+1}/5")
         audio_data = mic.read()
         if audio_data is not None:
             print(f"Audio data shape: {audio_data.shape}")
@@ -173,5 +202,5 @@ if __name__ == "__main__":
             break
         time.sleep(0.5)
     else:
-        print("[MIC] No audio data received after 5 attempts")
+        print("No audio data received after 5 attempts")
     mic.stop()
