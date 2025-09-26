@@ -14,23 +14,21 @@ else:
 
 
 class MicrophoneStream(BaseStream):
-    """RTSP audio stream using GStreamer appsink. This builds a pipeline roughly equivalent to:
-    uridecodebin uri=rtsp://... ! audioconvert ! audioresample ! audio/x-raw,format=F32LE,channels=<C>,rate=<R> ! appsink
+    """Audio stream from a provided GStreamer pipeline ending in an appsink.
 
-    :param uri: RTSP URI to the source with audio
-    :type uri: str
-    :param sample_rate: Output sample rate (e.g., 16000 or 48000)
-    :type sample_rate: int
-    :param channels: Output number of channels (1=mono, 2=stereo)
-    :type channels: int
-    :param sample_format: Output sample format (default F32LE)
-    :type sample_format: str
-    :param read_timeout_s: Timeout in seconds for read() when pulling a sample
-    :type read_timeout_s: float
+    Provide the full pipeline string. It must include an appsink named "appsink".
+    Set desired output caps in the pipeline (e.g., F32LE) before the appsink, e.g.:
+    ... ! audioconvert ! audioresample ! audio/x-raw,format=F32LE,channels=1,rate=8000 ! appsink name=appsink sync=false max-buffers=10 drop=true
+
+    :param pipeline: Full GStreamer pipeline string (must include appsink name=appsink)
+    :type pipeline: str
+    :param channels: Number of channels in the audio stream. If left as None, an attempt will be made to determine the channel count from the pipeline, defaults to None
+    :type channels: int, optional
+    :param read_timeout_s: Timeout in seconds for read() when pulling a sample, defaults to 0.2
+    :type read_timeout_s: float, optional
     """
 
-    def __init__(self, uri: str, sample_rate: int = 16000, channels: int = 1,
-                 sample_format: str = "F32LE", read_timeout_s: float = 0.2):
+    def __init__(self, pipeline: str, read_timeout_s: float = 0.2, channels: int | None = None):
         if _gi_import_error is not None:
             raise RuntimeError(
                 f"Failed to import GStreamer (gi): {_gi_import_error}"
@@ -39,80 +37,15 @@ class MicrophoneStream(BaseStream):
         if not Gst.is_initialized():
             Gst.init(None)
 
-        self.uri = uri
-        self.sample_rate = int(sample_rate)
-        self.channels = int(channels)
-        self.sample_format = str(sample_format)
-        self._timeout_s = float(read_timeout_s)
-
-        # Build pipeline elements
-        self.pipeline = Gst.Pipeline.new("audio-pipeline")
-
-        self.decodebin = Gst.ElementFactory.make("uridecodebin", "src")
-        if self.decodebin is None:
-            raise RuntimeError("Failed to create uridecodebin")
-        self.decodebin.set_property("uri", self.uri)
-
-        self.convert = Gst.ElementFactory.make("audioconvert", "convert")
-        if self.convert is None:
-            raise RuntimeError("Failed to create audioconvert")
-
-        self.resample = Gst.ElementFactory.make("audioresample", "resample")
-        if self.resample is None:
-            raise RuntimeError("Failed to create audioresample")
-
-        self.appsink = Gst.ElementFactory.make("appsink", "sink")
+        self._timeout_s = read_timeout_s
+        self._channels = channels if channels is not None else None
+        # Parse provided pipeline and locate the appsink named 'appsink'
+        self.pipeline = Gst.parse_launch(pipeline)
+        self.appsink = self.pipeline.get_by_name("appsink")
         if self.appsink is None:
-            raise RuntimeError("Failed to create appsink")
-
-        # Configure appsink: request format and behavior
-        caps_str = (
-            f"audio/x-raw,format={self.sample_format},layout=interleaved,"
-            f"channels={self.channels},rate={self.sample_rate}"
-        )
-        caps = Gst.Caps.from_string(caps_str)
-        self.appsink.set_property("caps", caps)
-        self.appsink.set_property("emit-signals", False)  # we'll poll
-        self.appsink.set_property("sync", False)
-        self.appsink.set_property("max-buffers", 10)
-        self.appsink.set_property("drop", True)
-
-        # Assemble pipeline
-        for elem in (self.decodebin, self.convert, self.resample, self.appsink):
-            self.pipeline.add(elem)
-
-        if not self.convert.link(self.resample):
-            raise RuntimeError("Failed to link audioconvert -> audioresample")
-        if not self.resample.link(self.appsink):
-            raise RuntimeError("Failed to link audioresample -> appsink")
-
-        # Deferred link from decodebin via pad-added
-        self.decodebin.connect("pad-added", self._on_decodebin_pad_added)
+            raise RuntimeError("Pipeline must contain an appsink named 'appsink'")
 
         self.running = False
-
-    def _on_decodebin_pad_added(self, decodebin, pad):
-        caps = pad.get_current_caps()
-        if caps is None:
-            caps = pad.query_caps(None)
-        if caps is None or caps.get_size() == 0:
-            print(f"[MIC] Pad added but no caps available: {pad.get_name()}")
-            return
-        structure = caps.get_structure(0)
-        media_type = structure.get_name() if structure is not None else ""
-        print(f"[MIC] Pad added: {pad.get_name()}, media_type: {media_type}")
-        if not media_type.startswith("audio/"):
-            print(f"[MIC] Skipping non-audio pad: {media_type}")
-            return
-        sink_pad = self.convert.get_static_pad("sink")
-        if not sink_pad.is_linked():
-            link_result = pad.link(sink_pad)
-            if link_result == Gst.PadLinkReturn.OK:
-                print(f"[MIC] Successfully linked audio pad")
-            else:
-                print(f"[MIC] Failed to link audio pad: {link_result}")
-        else:
-            print(f"[MIC] Audio converter sink already linked")
 
     def start(self):
         if self.running:
@@ -129,6 +62,20 @@ class MicrophoneStream(BaseStream):
         # Quick non-blocking error check
         self._poll_bus_errors(non_blocking=True)
         self.running = True
+        # Determine channel count from negotiated caps if not provided
+        if self._channels is None:
+            sink_pad = self.appsink.get_static_pad("sink")
+            if sink_pad is not None:
+                caps = sink_pad.get_current_caps()
+                if caps is not None and caps.get_size() > 0:
+                    structure = caps.get_structure(0)
+                    if structure is not None and structure.has_field("channels"):
+                        try:
+                            self._channels = int(structure.get_value("channels"))
+                            print(f"[MIC] Channel count determined from pipeline: {self._channels}")
+                        except Exception:
+                            print("[MIC][WARNING] Could not determine channel count from pipeline, defaulting to 1")
+                            self._channels = 1
         return self
 
     def stop(self):
@@ -159,14 +106,14 @@ class MicrophoneStream(BaseStream):
         try:
             # Convert to numpy array. We requested F32LE interleaved
             audio_np = np.frombuffer(map_info.data, dtype=np.float32)
-            if self.channels > 1:
+            if self._channels > 1:
                 # Reshape as (num_frames, channels)
-                frames = audio_np.size // self.channels
-                audio_np = audio_np[: frames * self.channels].reshape(frames, self.channels)
+                frames = audio_np.size // self._channels
+                audio_np = audio_np[: frames * self._channels].reshape(frames, self._channels)
             return audio_np.copy()
         finally:
             buffer.unmap(map_info)
-
+    
     def simulate_read(self):
         return np.random.uniform(-1.0, 1.0, (1024,)).astype(np.float32)
 
@@ -204,16 +151,18 @@ class MicrophoneStream(BaseStream):
 if __name__ == "__main__":
     import time
     rtsp_uri = "rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2"
-    # Use longer timeout for initial connection
-    mic = MicrophoneStream(rtsp_uri, read_timeout_s=2.0)
-    print(f"[MIC] Starting stream: {rtsp_uri}")
+    pipeline = (
+        f"rtspsrc location={rtsp_uri} latency=60 do-rtsp-keep-alive=true ! "
+        "application/x-rtp,media=audio,encoding-name=PCMA,clock-rate=8000 ! "
+        "rtppcmadepay ! alawdec ! audioconvert ! audioresample ! "
+        "audio/x-raw,format=F32LE,channels=1,rate=8000 ! "
+        "appsink name=appsink sync=false max-buffers=10 drop=true"
+    )
+    mic = MicrophoneStream(pipeline, read_timeout_s=2.0)
+    print(f"[MIC] Starting stream")
     mic.start()
-    
-    # Wait a moment for stream to stabilize
     print("[MIC] Waiting for stream to stabilize...")
     time.sleep(3)
-    
-    # Try multiple reads
     for i in range(5):
         print(f"[MIC] Attempt {i+1}/5")
         audio_data = mic.read()
@@ -225,5 +174,4 @@ if __name__ == "__main__":
         time.sleep(0.5)
     else:
         print("[MIC] No audio data received after 5 attempts")
-    
     mic.stop()

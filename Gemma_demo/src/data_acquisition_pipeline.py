@@ -18,9 +18,15 @@ camera_pipeline = f"rtspsrc location=rtsp://{config['camera']['username']}:{conf
 # If testing on non-gstreamer camera, use the following pipeline with gstreamer=False:
 #camera_pipeline = f"rtsp://{config['camera']['username']}:{config['camera']['password']}@{config['camera']['ip']}/{config['camera']['stream']}"
 
+# Build the microphone pipeline from YAML gstreamer_pipeline
+mic_pipeline = (
+    f"rtspsrc location=rtsp://{config['camera']['username']}:{config['camera']['password']}@{config['camera']['ip']}/{config['camera']['stream']} "
+    f"{config['microphone']['gstreamer_pipeline']}"
+)
+
 # Load in hardware streamers
 camera_stream = CameraStream(camera_pipeline, gstreamer=config['camera']['gstreamer'])
-microphone_stream = MicrophoneStream()
+microphone_stream = MicrophoneStream(mic_pipeline)
 sensor_array_stream = SensorArrayStream()
 
 # Load in data acquisition pipeline
