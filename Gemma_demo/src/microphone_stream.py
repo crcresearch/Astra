@@ -1,4 +1,5 @@
 import numpy as np
+import threading
 from stream import BaseStream
 
 try:
@@ -46,6 +47,9 @@ class MicrophoneStream(BaseStream):
             raise RuntimeError("Pipeline must contain an appsink named 'appsink'")
 
         self.running = False
+        self._latest = None
+        self._lock = None
+        self._thread = None
 
     def start(self):
         """Start the microphone stream.
@@ -67,6 +71,10 @@ class MicrophoneStream(BaseStream):
         # Quick non-blocking error check
         self._poll_bus_errors(non_blocking=True)
         self.running = True
+        # Initialize lock and start background puller
+        self._lock = threading.Lock()
+        self._thread = threading.Thread(target=self._update, daemon=True)
+        self._thread.start()
         # Determine channel count from negotiated caps if not provided
         if self._channels is None:
             sink_pad = self.appsink.get_static_pad("sink")
@@ -91,43 +99,51 @@ class MicrophoneStream(BaseStream):
         if not self.running:
             return
         self.running = False
+        # Join reader thread
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=2.0)
+        self._thread = None
         self.pipeline.set_state(Gst.State.NULL)
         # Drain any remaining error messages (non-blocking)
         self._poll_bus_errors(non_blocking=True)
+        print("[MIC][DEBUG] Microphone stream stopped")
 
     def read(self):
-        """Read a sample from the microphone stream.
+        """Return the latest cached audio sample captured by the background thread.
 
-        :return: The the captured audio sample or None if no sample is available.
+        :return: Latest audio sample or None if unavailable.
         :rtype: numpy.ndarray or None
         """
         if not self.running:
             print("[MIC] Microphone stream is not running")
             return None
-        # Check for errors or EOS before pulling a sample
-        self._poll_bus_errors(non_blocking=True)
-        # Get timeout in nanoseconds for the try-pull-sample call
-        timeout_ns = int(self._timeout_s * Gst.SECOND)
-        sample = self.appsink.emit("try-pull-sample", timeout_ns)
-        if sample is None:
-            print(f"[MIC] No sample available after {self._timeout_s}s timeout")
-            return None
-        buffer = sample.get_buffer()
-        if buffer is None:
-            return None
-        success, map_info = buffer.map(Gst.MapFlags.READ)
-        if not success:
-            return None
-        try:
-            # Convert to numpy array. We requested F32LE interleaved
-            audio_np = np.frombuffer(map_info.data, dtype=np.float32)
-            if self._channels > 1:
-                # Reshape as (num_frames, channels)
-                frames = audio_np.size // self._channels
-                audio_np = audio_np[: frames * self._channels].reshape(frames, self._channels)
-            return audio_np.copy()
-        finally:
-            buffer.unmap(map_info)
+        with self._lock:
+            return None if self._latest is None else self._latest.copy()
+
+    def _update(self):
+        """Background puller that keeps the latest audio sample fresh."""
+        while self.running:
+            # Check for errors or EOS to keep bus drained
+            self._poll_bus_errors(non_blocking=True)
+            timeout_ns = int(self._timeout_s * Gst.SECOND)
+            sample = self.appsink.emit("try-pull-sample", timeout_ns)
+            if sample is None:
+                continue
+            buffer = sample.get_buffer()
+            if buffer is None:
+                continue
+            success, map_info = buffer.map(Gst.MapFlags.READ)
+            if not success:
+                continue
+            try:
+                arr = np.frombuffer(map_info.data, dtype=np.float32)
+                if self._channels is not None and self._channels > 1:
+                    frames = arr.size // self._channels
+                    arr = arr[: frames * self._channels].reshape(frames, self._channels)
+                with self._lock:
+                    self._latest = arr.copy()
+            finally:
+                buffer.unmap(map_info)
     
     def simulate_read(self):
         """Simulate reading a sample from the microphone stream.
