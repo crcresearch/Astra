@@ -23,13 +23,17 @@ class MicrophoneStream(BaseStream):
 
     :param pipeline: Full GStreamer pipeline string (must include appsink name=appsink)
     :type pipeline: str
+    :param ring_buffer_seconds: Number of seconds of audio to keep in the ring buffer, defaults to 5
+    :type ring_buffer_seconds: int, optional
     :param channels: Number of channels in the audio stream. If left as None, an attempt will be made to determine the channel count from the pipeline, defaults to None
     :type channels: int, optional
     :param read_timeout_s: Timeout in seconds for read() when pulling a sample, defaults to 0.2
     :type read_timeout_s: float, optional
+    :param sample_rate: Sample rate to use if it cannot be determined from the pipeline, defaults to None
+    :type sample_rate: int, optional
     """
 
-    def __init__(self, pipeline: str, read_timeout_s: float = 0.2, channels: int | None = None):
+    def __init__(self, pipeline: str, ring_buffer_seconds=5, read_timeout_s: float = 0.2, channels: int | None = None, sample_rate: int | None = None):
         if _gi_import_error is not None:
             raise RuntimeError(
                 f"Failed to import GStreamer (gi): {_gi_import_error}"
@@ -39,7 +43,9 @@ class MicrophoneStream(BaseStream):
             Gst.init(None)
 
         self._timeout_s = read_timeout_s
-        self._channels = channels if channels is not None else None
+        self._channels = channels
+        self._buffer_seconds = float(ring_buffer_seconds)
+        self._sample_rate = sample_rate
         # Parse provided pipeline and locate the appsink named 'appsink'
         self.pipeline = Gst.parse_launch(pipeline)
         self.appsink = self.pipeline.get_by_name("appsink")
@@ -50,6 +56,10 @@ class MicrophoneStream(BaseStream):
         self._latest = None
         self._lock = None
         self._thread = None
+        # Ring buffer storage
+        self._rbuff = []            # list of numpy arrays (frames[, channels])
+        self._rbuff_frames = 0      # total frames stored
+        self._rbuff_cap = 0         # capacity in frames
 
     def start(self):
         """Start the microphone stream.
@@ -71,10 +81,6 @@ class MicrophoneStream(BaseStream):
         # Quick non-blocking error check
         self._poll_bus_errors(non_blocking=True)
         self.running = True
-        # Initialize lock and start background puller
-        self._lock = threading.Lock()
-        self._thread = threading.Thread(target=self._update, daemon=True)
-        self._thread.start()
         # Determine channel count from negotiated caps if not provided
         if self._channels is None:
             sink_pad = self.appsink.get_static_pad("sink")
@@ -91,6 +97,29 @@ class MicrophoneStream(BaseStream):
             if self._channels is None:
                 print("[MIC][WARNING] Could not determine channel count from pipeline, defaulting to 1")
                 self._channels = 1
+        # Determine sample rate
+        if self._sample_rate is None:
+            sink_pad = self.appsink.get_static_pad("sink")
+            if sink_pad is not None:
+                caps = sink_pad.get_current_caps()
+                if caps is not None and caps.get_size() > 0:
+                    structure = caps.get_structure(0)
+                    if structure is not None and structure.has_field("rate"):
+                        try:
+                            self._sample_rate = int(structure.get_value("rate"))
+                            print(f"[MIC] Sample rate determined from pipeline: {self._sample_rate}")
+                        except Exception:
+                            self._sample_rate = None
+        if self._sample_rate is None:
+            # Conservative fallback
+            self._sample_rate = 8000
+            print("[MIC][WARNING] Could not determine sample rate from pipeline, defaulting to 8000")
+        # Compute ring buffer capacity in frames
+        self._rbuff_cap = int(self._buffer_seconds * self._sample_rate)
+        # Initialize lock and start background puller
+        self._lock = threading.Lock()
+        self._thread = threading.Thread(target=self._update, daemon=True)
+        self._thread.start()
         return self
 
     def stop(self):
@@ -109,16 +138,36 @@ class MicrophoneStream(BaseStream):
         print("[MIC][DEBUG] Microphone stream stopped")
 
     def read(self):
-        """Return the latest cached audio sample captured by the background thread.
+        """Return the most recent ring-buffer window.
 
-        :return: Latest audio sample or None if unavailable.
+        :return: Concatenated audio window or None if unavailable.
         :rtype: numpy.ndarray or None
         """
         if not self.running:
             print("[MIC] Microphone stream is not running")
             return None
+        # Gather the last _buffer_seconds worth of frames
         with self._lock:
-            return None if self._latest is None else self._latest.copy()
+            if self._rbuff_frames <= 0:
+                return None
+            need = self._rbuff_cap if self._rbuff_cap > 0 else self._rbuff_frames
+            need = min(need, self._rbuff_frames)
+            chunks = []
+            remaining = need
+            for arr in reversed(self._rbuff):
+                n = arr.shape[0] if arr.ndim > 1 else arr.size
+                if remaining <= 0:
+                    break
+                if n >= remaining:
+                    chunks.append(arr[-remaining:])
+                    remaining = 0
+                else:
+                    chunks.append(arr)
+                    remaining -= n
+            if not chunks:
+                return None
+            window = np.concatenate(chunks[::-1], axis=0)
+            return window.astype(np.float32, copy=False)
 
     def _update(self):
         """Background puller that keeps the latest audio sample fresh."""
@@ -141,7 +190,16 @@ class MicrophoneStream(BaseStream):
                     frames = arr.size // self._channels
                     arr = arr[: frames * self._channels].reshape(frames, self._channels)
                 with self._lock:
-                    self._latest = arr.copy()
+                    # Append to ring buffer
+                    self._rbuff.append(arr.copy())
+                    frames = arr.shape[0] if arr.ndim > 1 else arr.size
+                    self._rbuff_frames += frames
+                    # Evict old data beyond capacity
+                    while self._rbuff_cap > 0 and self._rbuff_frames > self._rbuff_cap and self._rbuff:
+                        oldest = self._rbuff[0]
+                        drop = oldest.shape[0] if oldest.ndim > 1 else oldest.size
+                        self._rbuff_frames -= drop
+                        self._rbuff.pop(0)
             finally:
                 buffer.unmap(map_info)
     
@@ -206,17 +264,19 @@ if __name__ == "__main__":
     print(f"Starting stream")
     mic.start()
     print("Waiting for stream to stabilize...")
-    time.sleep(3)
+    for i in range(10):
+        time.sleep(1)
+        print(f"{10-i}")
     print("Make some noise!")
-    for i in range(5):
-        print(f"Attempt {i+1}/5")
+    for i in range(10):
+        print(f"Attempt {i+1}/10")
         audio_data = mic.read()
         if audio_data is not None:
             print(f"Audio data shape: {audio_data.shape}")
             print(f"Audio data type: {audio_data.dtype}")
             print(f"Audio data range: [{audio_data.min():.3f}, {audio_data.max():.3f}]")
             break
-        time.sleep(0.5)
+        time.sleep(1)
     else:
-        print("No audio data received after 5 attempts")
+        print("No audio data received after 10 attempts")
     mic.stop()
