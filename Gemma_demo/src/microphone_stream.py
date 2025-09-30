@@ -264,9 +264,9 @@ if __name__ == "__main__":
     print(f"Starting stream")
     mic.start()
     print("Waiting for stream to stabilize...")
-    for i in range(10):
+    for i in range(3):
         time.sleep(1)
-        print(f"{10-i}")
+        print(f"{3-i}")
     print("Make some noise!")
     for i in range(10):
         print(f"Attempt {i+1}/10")

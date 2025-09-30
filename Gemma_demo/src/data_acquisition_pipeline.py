@@ -8,6 +8,11 @@ import time
 
 # Path to devices' config file
 DEVICE_CONFIG_PATH = 'device_config.yaml'
+OUTPUT_FILE = ""
+
+video_frames = None
+audio_frames = None
+sensor_data = None
 
 # Load in config
 with open(DEVICE_CONFIG_PATH, 'r') as f:
@@ -41,12 +46,20 @@ daq.simulate_voice_command("start")
 # Allow time for the streams to start
 time.sleep(5)
 
-# On voice activation, collect data
-for _ in range(3):
-    #sample = daq.collect_data()
-    sample = daq.simulate_collect_data()
-    print("Sample:", sample)
-    time.sleep(1)
+# TODO: Implement collect data at 10Hz
+target_sample_rate = 10
+while True:
+    try:
+        sample = daq.simulate_collect_data()
+        print("Sample:", sample)
+    except KeyboardInterrupt:
+        print("Keyboard interrupt")
+        # TODO: save data to file
+        break
+    except Exception as e:
+        print(f"Error: {e}")
+        break
+    time.sleep(1/target_sample_rate)
 
 # Simulate voice command to stop
 daq.simulate_voice_command("stop")
