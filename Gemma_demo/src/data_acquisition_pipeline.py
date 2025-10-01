@@ -50,7 +50,7 @@ microphone_stream = MicrophoneStream(mic_pipeline, channels=config['microphone']
 sensor_array_stream = SensorArrayStream()
 
 # Load in data acquisition pipeline
-daq = DataAcquisition(streams=[camera_stream, microphone_stream, sensor_array_stream], voice_activation=True,
+daq = DataAcquisition(streams=[camera_stream, microphone_stream,], voice_activation=True,
                       video_fps_num=config['camera']['video_fps_numerator'], video_fps_den=config['camera']['video_fps_denominator'],
                       audio_sample_rate=config['microphone']['audio_sample_rate'], audio_channels=config['microphone']['audio_channels'])
 
@@ -65,14 +65,17 @@ time.sleep(5)
 
 # Collect data at 20Hz
 target_sample_rate = 20
+print(f"Collecting data at {target_sample_rate}Hz")
 while True:
     try:
+        time.sleep(1/target_sample_rate)
         sample = daq.collect_data()
         #print("Sample:", sample)
         # Push audio and video frames to muxer
-        if sample and "video_frame" in sample and "audio_frame" in sample:
-            avs.push_video(sample['video_frame'], sample['video_pts_ns'])
-            avs.push_audio(sample['audio_frame'], sample['audio_pts_ns'])
+        if sample and 'video_frame' in sample:
+            avs.push_video(sample['video_frame'], pts_ns=sample['video_pts_ns'])
+        if sample and 'audio_frame' in sample:
+            avs.push_audio(sample['audio_frame'], pts_ns=sample['audio_pts_ns'])
     except KeyboardInterrupt:
         print("Keyboard interrupt")
         # Stop the muxer GStreamer and therefore save to an output file.
@@ -81,7 +84,7 @@ while True:
     except Exception as e:
         print(f"Error: {e}")
         break
-    time.sleep(1/target_sample_rate)
+    
 
 # Simulate voice command to stop
 daq.simulate_voice_command("stop")
