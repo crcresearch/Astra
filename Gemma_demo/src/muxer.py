@@ -1,4 +1,5 @@
 import numpy as np
+import threading
 
 try:
     import gi
@@ -55,6 +56,8 @@ class GStreamerMuxer:
     :type video_format: str, optional
     :param audio_format: Appsrc raw audio format (e.g., "F32LE"), defaults to "F32LE".
     :type audio_format: str, optional
+    :param debug: Enable debug mode (print GStreamer bus messages), defaults to False.
+    :type debug: bool, optional
     :raises RuntimeError: If GStreamer is unavailable, pipeline parsing fails, or required elements are missing.
     """
 
@@ -70,6 +73,7 @@ class GStreamerMuxer:
         audio_channels: int,
         video_format: str = "BGR",
         audio_format: str = "F32LE",
+        debug: bool = False,
     ) -> None:
         if _gi_import_error is not None:
             raise RuntimeError(f"Failed to import GStreamer (gi): {_gi_import_error}")
@@ -118,8 +122,11 @@ class GStreamerMuxer:
         # Appsrc timestamping is driven by caller PTS (do-timestamp=false)
 
         self._started = False
+        self._debug = debug
         self._video_pts_ns = 0
         self._frame_duration_ns = int(Gst.SECOND * self._video_fps_den // max(self._video_fps_num, 1))
+        self._bus = None
+        self._bus_thread = None
 
     def start(self) -> None:
         """Start the muxer pipeline.
@@ -138,6 +145,10 @@ class GStreamerMuxer:
             self._pipeline.set_state(Gst.State.NULL)
             raise RuntimeError("Failed to set muxer pipeline to PLAYING")
         self._started = True
+        # Start bus watcher thread for diagnostics
+        self._bus = self._pipeline.get_bus()
+        self._bus_thread = threading.Thread(target=self._bus_loop, name="MuxerBusLoop", daemon=True)
+        self._bus_thread.start()
 
     def stop(self) -> None:
         """Stop the muxer pipeline and finalize the output file.
@@ -157,6 +168,10 @@ class GStreamerMuxer:
             pass
         self._pipeline.set_state(Gst.State.NULL)
         self._started = False
+        # Stop bus thread
+        if self._bus_thread and self._bus_thread.is_alive():
+            self._bus_thread.join(timeout=2.0)
+        self._bus_thread = None
 
     def push_video(self, frame_bgr: np.ndarray, pts_ns: int | None = None, duration_ns: int | None = None) -> None:
         """Push a single video frame into the muxer.
@@ -185,7 +200,9 @@ class GStreamerMuxer:
         buf.duration = self._frame_duration_ns if duration_ns is None else int(duration_ns)
         if pts_ns is None:
             self._video_pts_ns += buf.duration
-        self._vid_src.emit("push-buffer", buf)
+        ret = self._vid_src.emit("push-buffer", buf)
+        if self._debug and ret != Gst.FlowReturn.OK:
+            print(f"[MUX][VIDEO] push-buffer returned {ret}")
 
     def push_audio(self, audio_chunk: np.ndarray, pts_ns: int, duration_ns: int | None = None) -> None:
         """Push an audio chunk into the muxer.
@@ -216,6 +233,43 @@ class GStreamerMuxer:
         buf.fill(0, data)
         buf.pts = int(pts_ns)
         buf.duration = int(frames * Gst.SECOND // self._audio_rate) if duration_ns is None else int(duration_ns)
-        self._aud_src.emit("push-buffer", buf)
+        ret = self._aud_src.emit("push-buffer", buf)
+        if self._debug and ret != Gst.FlowReturn.OK:
+            print(f"[MUX][AUDIO] push-buffer returned {ret}")
+
+    def _bus_loop(self) -> None:
+        """Background loop to log GStreamer bus messages for diagnostics."""
+        if self._bus is None:
+            return
+        flags = (
+            Gst.MessageType.ERROR
+            | Gst.MessageType.WARNING
+            | Gst.MessageType.INFO
+            | Gst.MessageType.EOS
+            | Gst.MessageType.STATE_CHANGED
+        )
+        while self._started:
+            msg = self._bus.timed_pop_filtered(int(0.2 * Gst.SECOND), flags)
+            if msg is None:
+                continue
+            mtype = msg.type
+            if mtype == Gst.MessageType.ERROR:
+                err, debug = msg.parse_error()
+                print(f"[MUX][ERROR] {err}; debug={debug}")
+            elif mtype == Gst.MessageType.WARNING:
+                warn, debug = msg.parse_warning()
+                print(f"[MUX][WARN] {warn}; debug={debug}")
+            elif mtype == Gst.MessageType.INFO:
+                info, debug = msg.parse_info()
+                if self._debug:
+                    print(f"[MUX][INFO] {info}; debug={debug}")
+            elif mtype == Gst.MessageType.EOS:
+                print("[MUX] EOS received")
+                break
+            elif mtype == Gst.MessageType.STATE_CHANGED:
+                if self._debug:
+                    old, new, pending = msg.parse_state_changed()
+                    src_name = msg.src.get_name() if msg.src else "(unknown)"
+                    print(f"[MUX][STATE] {src_name}: {old.value_nick} -> {new.value_nick}")
 
 
