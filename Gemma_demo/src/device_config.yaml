@@ -5,13 +5,18 @@ camera:
   stream: "stream2"
   gstreamer_pipeline: "protocols=tcp latency=60 ! rtph264depay ! h264parse ! nvv4l2decoder ! nvvidconv ! video/x-raw, format=BGRx ! videoconvert ! appsink sync=false max-buffers=1 drop=true"
   gstreamer: true
+  video_fps_numerator: 20
+  video_fps_denominator: 1
 
 microphone:
   gstreamer_pipeline: "latency=60 do-rtsp-keep-alive=true ! application/x-rtp,media=audio,encoding-name=PCMA,clock-rate=8000 ! rtppcmadepay ! alawdec ! audioconvert ! audioresample ! audio/x-raw,format=F32LE,channels=1,rate=8000 ! appsink name=appsink sync=false max-buffers=1 drop=true"
   channels: 1 # Ensure this matches the pipeline's channel count
+  audio_sample_rate: 8000
+  audio_channels: 1
 
 audio_video_pipeline:
   gstreamer_pipeline: "rtspsrc location=rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2 protocols=tcp latency=300 do-rtsp-keep-alive=true name=src src. ! queue ! application/x-rtp,media=video,encoding-name=H264 ! rtph264depay ! h264parse config-interval=-1 ! nvv4l2decoder ! nvvidconv ! video/x-raw,format=I420 ! videorate ! video/x-raw,format=I420,framerate=20/1 ! queue ! x264enc speed-preset=ultrafast tune=zerolatency key-int-max=40 bitrate=4000 ! h264parse config-interval=-1 ! queue ! mux. src. ! queue ! application/x-rtp,media=audio,encoding-name=PCMA,clock-rate=8000 ! rtppcmadepay ! alawdec ! audioconvert ! audioresample ! audiorate ! audio/x-raw,rate=8000,channels=1,format=S16LE ! queue ! voaacenc bitrate=128000 ! aacparse ! queue ! mux. mp4mux name=mux faststart=true ! filesink location=output.mp4"
+  appsrc_av_pipeline: "appsrc name=vid_src is-live=true format=time do-timestamp=false caps=video/x-raw,format=BGR,width=640,height=360,framerate=20/1 ! videoconvert ! x264enc speed-preset=ultrafast tune=zerolatency key-int-max=40 bitrate=3000 ! h264parse config-interval=-1 ! queue ! mux. appsrc name=aud_src is-live=true format=time do-timestamp=false caps=audio/x-raw,format=F32LE,layout=interleaved,channels=1,rate=8000 ! audioconvert ! audioresample ! voaacenc bitrate=128000 ! aacparse ! queue ! mux. mp4mux name=mux faststart=true ! filesink name=out location=output.mp4"
   gstreamer_pipeline_optimized: "rtspsrc location=rtsp://voice4pimd:voice4pimd@10.12.130.50/stream2 protocols=tcp latency=300 do-rtsp-keep-alive=true name=src src. ! queue ! application/x-rtp,media=video,encoding-name=H264 ! rtph264depay ! h264parse config-interval=-1 ! nvv4l2decoder ! nvvidconv ! videorate ! video/x-raw,format=I420,framerate=20/1 ! queue ! x264enc speed-preset=ultrafast tune=zerolatency key-int-max=20 bitrate=2500 ! h264parse config-interval=-1 ! queue ! mux. src. ! queue ! application/x-rtp,media=audio,encoding-name=PCMA,clock-rate=8000 ! rtppcmadepay ! alawdec ! audioconvert ! audiorate ! audio/x-raw,rate=8000,channels=1,format=S16LE ! queue ! voaacenc bitrate=64000 ! aacparse ! queue ! mux. mp4mux name=mux faststart=true ! filesink location=output.mp4"
 sensor_array:
   pipeline: "default"

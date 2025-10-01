@@ -10,6 +10,7 @@ from stream import BaseStream
 
 class DataAcquisition:
     """Orchestrator for recording streams for data collection.
+    NOTE: Currently, multiple streams of the same type (i.e. multiple cameras) are not supported.
 
     :param streams: List of streams to use. All streams must be instances of BaseStream.
     :type streams: list[BaseStream]
@@ -17,8 +18,18 @@ class DataAcquisition:
     :type voice_activation: bool, optional
     :param auto_stop_after_seconds: Number of seconds to record after voice activation before stopping, defaults to None
     :type auto_stop_after_seconds: int, optional
+    :param video_fps_num: Video FPS numerator for timestamping (e.g., 20 for 20/1), defaults to 20
+    :type video_fps_num: int, optional
+    :param video_fps_den: Video FPS denominator for timestamping (e.g., 1 for 20/1), defaults to 1
+    :type video_fps_den: int, optional
+    :param audio_sample_rate: Audio sample rate in Hz for timestamping (e.g., 8000), defaults to 8000
+    :type audio_sample_rate: int, optional
+    :param audio_channels: Audio channel count (1=mono, 2=stereo), defaults to 1
+    :type audio_channels: int, optional
     """
-    def __init__(self, streams, voice_activation=True, auto_stop_after_seconds=None):
+    def __init__(self, streams, voice_activation=True, auto_stop_after_seconds=None,
+                 video_fps_num: int = 20, video_fps_den: int = 1,
+                 audio_sample_rate: int = 8000, audio_channels: int = 1):
         # Check and filter out unsupported streams.
         self.device_streams = []
         for stream in streams:
@@ -28,12 +39,19 @@ class DataAcquisition:
                 self.device_streams.append(stream)
         self.voice_activation = voice_activation
         self.is_recording = False
+        # Timestamping configuration and counters
+        self._video_fps_num = video_fps_num
+        self._video_fps_den = video_fps_den
+        self._audio_sample_rate = audio_sample_rate
+        self._audio_channels = audio_channels
+        self._video_frame_index = 0  # frames emitted
+        self._audio_samples_emitted = 0  # samples (frames) emitted per channel frame count
         # Voice listener internals
         self._voice_cmd_queue = queue.Queue()
         self._voice_listener_thread = None
         # Auto stop not implemented yet
         if auto_stop_after_seconds:
-            raise NotImplementedError("Auto stop not implemented yet.\nPlease leave auto_stop_after_seconds as None.")
+            raise NotImplementedError("Auto stop not yet implemented.\nPlease leave auto_stop_after_seconds as None.")
         self.auto_stop_after_seconds = auto_stop_after_seconds
 
     def add_device(self, stream: BaseStream):
@@ -74,6 +92,10 @@ class DataAcquisition:
                 self.is_recording = True
             except Exception as e:
                 print(f"[DAQ] Failed to start stream: {device.__class__.__name__} - {e}")
+        # Reset PTS counters on (re)start
+        if self.is_recording:
+            self._video_frame_index = 0
+            self._audio_samples_emitted = 0
 
     def stop(self):
         """Stop all streams.
@@ -92,21 +114,43 @@ class DataAcquisition:
         self.is_recording = False
 
     def collect_data(self):
-        """Collect one sample from each device.
+        """Collect one sample from each device and compute timestamps.
 
-        :return: A dictionary of data from each device. If no recording session is active, returns None.
-        :rtype: dict or None
+        - Returns standardized keys for convenience with muxing:
+          - ``video_frame`` and ``video_pts_ns`` (if a frame was read)
+          - ``audio_frame`` and ``audio_pts_ns`` (if audio was read)
+
+        :return: A dictionary containing collected data and PTS values, or None if not recording.
+        :rtype: dict | None
         """
         if not self.is_recording:
             print("[DAQ] No recording session is active. Please start a recording session before collecting data.")
             return None
         data = {}
+        NS_PER_SEC = 1_000_000_000
+
         for device in self.device_streams:
             try:
-                data[device.__class__.__name__] = device.read()
+                sample = device.read()
+                #data[device.__class__.__name__] = sample
+                # Standardized extraction
+                if isinstance(device, CameraStream) and sample is not None:
+                    # Compute PTS based on configured fps
+                    frame_duration_ns = (NS_PER_SEC * self._video_fps_den) // max(self._video_fps_num, 1)
+                    data['video_pts_ns'] = int(self._video_frame_index * frame_duration_ns)
+                    data['video_frame'] = sample
+                    self._video_frame_index += 1
+                elif isinstance(device, MicrophoneStream) and sample is not None:
+                    # Determine frames in chunk (first dim length)
+                    frames = sample.shape[0] if hasattr(sample, 'shape') else len(sample)
+                    # Compute PTS from emitted samples (frame count)
+                    data['audio_pts_ns'] = int((self._audio_samples_emitted * NS_PER_SEC) // max(self._audio_sample_rate, 1))
+                    data['audio_frame'] = sample
+                    # Advance emitted counter by the returned window length
+                    self._audio_samples_emitted += int(frames)
             except Exception as e:
                 print(f"[DAQ] Failed to collect data from {device.__class__.__name__} - {e}")
-                print("[DAQ][WARNING] Proper handling of failed data collection is not implemented yet.")
+                print("[DAQ][WARNING] Proper handling of failed data collection is not yet implemented.")
         return data
 
     def simulate_collect_data(self):
