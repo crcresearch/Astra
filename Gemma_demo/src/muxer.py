@@ -127,6 +127,7 @@ class GStreamerMuxer:
         self._frame_duration_ns = int(Gst.SECOND * self._video_fps_den // max(self._video_fps_num, 1))
         self._bus = None
         self._bus_thread = None
+        self._eos_event = threading.Event()
 
     def start(self) -> None:
         """Start the muxer pipeline.
@@ -161,11 +162,17 @@ class GStreamerMuxer:
         """
         if not self._started:
             return
+        # Request EOS and wait briefly so mp4mux can finalize moov/mdat
+        self._eos_event.clear()
         try:
-            self._vid_src.emit("end-of-stream")
-            self._aud_src.emit("end-of-stream")
+            if self._vid_src is not None:
+                self._vid_src.emit("end-of-stream")
+            if self._aud_src is not None:
+                self._aud_src.emit("end-of-stream")
         except Exception:
             pass
+        # Wait up to 3 seconds for EOS to propagate
+        self._eos_event.wait(timeout=3.0)
         self._pipeline.set_state(Gst.State.NULL)
         self._started = False
         # Stop bus thread
@@ -201,8 +208,8 @@ class GStreamerMuxer:
         if pts_ns is None:
             self._video_pts_ns += buf.duration
         ret = self._vid_src.emit("push-buffer", buf)
-        if self._debug and ret != Gst.FlowReturn.OK:
-            print(f"[MUX][VIDEO] push-buffer returned {ret}")
+        if self._debug:
+            print(f"[MUX][VIDEO] pts={int(buf.pts)} dur={int(buf.duration)} bytes={len(data)} ret={ret}")
 
     def push_audio(self, audio_chunk: np.ndarray, pts_ns: int, duration_ns: int | None = None) -> None:
         """Push an audio chunk into the muxer.
@@ -234,8 +241,8 @@ class GStreamerMuxer:
         buf.pts = int(pts_ns)
         buf.duration = int(frames * Gst.SECOND // self._audio_rate) if duration_ns is None else int(duration_ns)
         ret = self._aud_src.emit("push-buffer", buf)
-        if self._debug and ret != Gst.FlowReturn.OK:
-            print(f"[MUX][AUDIO] push-buffer returned {ret}")
+        if self._debug:
+            print(f"[MUX][AUDIO] pts={int(buf.pts)} dur={int(buf.duration)} bytes={len(data)} ret={ret}")
 
     def _bus_loop(self) -> None:
         """Background loop to log GStreamer bus messages for diagnostics."""
@@ -265,6 +272,7 @@ class GStreamerMuxer:
                     print(f"[MUX][INFO] {info}; debug={debug}")
             elif mtype == Gst.MessageType.EOS:
                 print("[MUX] EOS received")
+                self._eos_event.set()
                 break
             elif mtype == Gst.MessageType.STATE_CHANGED:
                 if self._debug:

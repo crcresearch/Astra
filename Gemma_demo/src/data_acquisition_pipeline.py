@@ -28,7 +28,8 @@ avs = GStreamerMuxer(
     video_height=360,
     video_fps_num=20, video_fps_den=1,
     audio_rate=8000, audio_channels=1,
-    video_format="BGR", audio_format="F32LE"
+    video_format="BGR", audio_format="F32LE",
+    debug=True
 )
 # Start up GStreamer output pipeline.
 avs.start()
