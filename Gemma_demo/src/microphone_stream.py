@@ -294,7 +294,7 @@ if __name__ == "__main__":
     print("Make some noise!")
     for i in range(10):
         print(f"Attempt {i+1}/10")
-        audio_data = mic.read()
+        audio_data, start_pts = mic.read()
         if audio_data is not None:
             print(f"Audio data shape: {audio_data.shape}")
             print(f"Audio data type: {audio_data.dtype}")

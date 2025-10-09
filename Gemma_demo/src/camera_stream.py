@@ -127,8 +127,9 @@ if __name__ == "__main__":
     camera = CameraStream(pipeline, gstreamer=True)
     camera.start()
     while True:
-        frame = camera.read()
+        frame, timestamp = camera.read()
         if frame is not None:
+            print(f"Timestamp: {timestamp}")
             cv2.imshow("Camera", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
