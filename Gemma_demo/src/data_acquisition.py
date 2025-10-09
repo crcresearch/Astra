@@ -39,14 +39,12 @@ class DataAcquisition:
                 self.device_streams.append(stream)
         self.voice_activation = voice_activation
         self.is_recording = False
-        # Timestamping configuration and counters
-        self._video_fps_num = video_fps_num
-        self._video_fps_den = video_fps_den
+        # Timestamping configuration (camera/microphone provide PTS; DAQ only computes audio tail offset)
+        self._video_fps_num = video_fps_num  # kept for future use if needed
+        self._video_fps_den = video_fps_den  # kept for future use if needed
         self._audio_sample_rate = audio_sample_rate
         self._audio_channels = audio_channels
-        self._video_frame_index = 0  # frames emitted
-        self._audio_samples_emitted = 0  # samples (frames) emitted per channel frame count
-        self._last_collect_ns = None
+        self._last_audio_pts_ns = None  # last pushed audio PTS for precise slicing
         # Voice listener internals
         self._voice_cmd_queue = queue.Queue()
         self._voice_listener_thread = None
@@ -93,11 +91,9 @@ class DataAcquisition:
                 self.is_recording = True
             except Exception as e:
                 print(f"[DAQ] Failed to start stream: {device.__class__.__name__} - {e}")
-        # Reset PTS counters on (re)start
+        # Reset timing baseline on (re)start
         if self.is_recording:
-            self._video_frame_index = 0
-            self._audio_samples_emitted = 0
-            self._last_collect_ns = None
+            self._last_audio_pts_ns = None
 
     def stop(self):
         """Stop all streams.
@@ -130,40 +126,44 @@ class DataAcquisition:
             return None
         data = {}
         NS_PER_SEC = 1_000_000_000
-        now_ns = time.monotonic_ns()
-        elapsed_ns = None if self._last_collect_ns is None else max(0, now_ns - self._last_collect_ns)
-        # Estimate how many new audio frames arrived since last call
-        est_new_audio_frames = 0
-        if elapsed_ns is not None and self._audio_sample_rate > 0:
-            est_new_audio_frames = int((elapsed_ns * self._audio_sample_rate) // NS_PER_SEC)
 
         for device in self.device_streams:
             try:
+                # Streams share the same API, but outputs differ per device type.
                 sample = device.read()
                 #data[device.__class__.__name__] = sample
                 # Standardized extraction
                 if isinstance(device, CameraStream) and sample is not None:
-                    # Compute PTS based on configured fps
-                    frame_duration_ns = (NS_PER_SEC * self._video_fps_den) // max(self._video_fps_num, 1)
-                    data['video_pts_ns'] = int(self._video_frame_index * frame_duration_ns)
-                    data['video_frame'] = sample
-                    self._video_frame_index += 1
+                    # sample: (frame, pts_ns)
+                    data['video_frame'] = sample[0]
+                    data['video_pts_ns'] = sample[1] if sample[1] is not None else 0
                 elif isinstance(device, MicrophoneStream) and sample is not None:
-                    # Use only the newest, non-overlapping tail estimated from elapsed time
-                    total_frames = sample.shape[0] if hasattr(sample, 'shape') else len(sample)
-                    take_frames = est_new_audio_frames if est_new_audio_frames > 0 else 0
-                    if take_frames > total_frames:
-                        take_frames = total_frames
-                    if take_frames > 0:
-                        tail = sample[-take_frames:]
-                        data['audio_pts_ns'] = int((self._audio_samples_emitted * NS_PER_SEC) // max(self._audio_sample_rate, 1))
+                    # sample: (window, start_pts_ns)
+                    window, start_pts_ns = sample
+                    total_frames = window.shape[0] if hasattr(window, 'shape') else len(window)
+                    if total_frames <= 0:
+                        continue
+                    rate = max(self._audio_sample_rate, 1)
+                    # Compute window end PTS
+                    window_dur_ns = (total_frames * NS_PER_SEC) // rate
+                    window_end_pts = int(start_pts_ns + window_dur_ns)
+                    # Initialize last audio pts if needed
+                    if self._last_audio_pts_ns is None:
+                        self._last_audio_pts_ns = start_pts_ns
+                    # Desired start is the later of last pushed or window start
+                    desired_start_pts = max(self._last_audio_pts_ns, start_pts_ns)
+                    # Convert desired start to frame index within window
+                    offset_ns = max(0, desired_start_pts - start_pts_ns)
+                    start_idx = int((offset_ns * rate) // NS_PER_SEC)
+                    if start_idx < total_frames:
+                        tail = window[start_idx:]
                         data['audio_frame'] = tail
-                        self._audio_samples_emitted += int(take_frames)
+                        data['audio_pts_ns'] = desired_start_pts
+                        # Advance last pushed to window end
+                        self._last_audio_pts_ns = window_end_pts
             except Exception as e:
                 print(f"[DAQ] Failed to collect data from {device.__class__.__name__} - {e}")
                 print("[DAQ][WARNING] Proper handling of failed data collection is not yet implemented.")
-        # Update last timestamp after reads
-        self._last_collect_ns = now_ns
         return data
 
     def simulate_collect_data(self):

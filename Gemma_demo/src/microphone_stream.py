@@ -56,7 +56,7 @@ class MicrophoneStream(BaseStream):
         self._latest = None
         self._lock = None
         self._thread = None
-        # Ring buffer storage
+        # Ring buffer storage (technically, it's just a sliding window)
         self._rbuff = []            # list of numpy arrays (frames[, channels])
         self._rbuff_frames = 0      # total frames stored
         self._rbuff_cap = 0         # capacity in frames
@@ -138,10 +138,14 @@ class MicrophoneStream(BaseStream):
         print("[MIC][DEBUG] Microphone stream stopped")
 
     def read(self):
-        """Return the most recent ring-buffer window.
+        """Return the most recent ring-buffer window and its start PTS.
 
-        :return: Concatenated audio window or None if unavailable.
-        :rtype: numpy.ndarray or None
+        The returned PTS corresponds to the estimated start timestamp of the
+        window in nanoseconds based on the GStreamer buffer PTS values and the
+        configured sample rate.
+
+        :return: Tuple of (audio window, start PTS in nanoseconds), or None if unavailable.
+        :rtype: tuple[numpy.ndarray, int] or None
         """
         if not self.running:
             print("[MIC] Microphone stream is not running")
@@ -153,21 +157,39 @@ class MicrophoneStream(BaseStream):
             need = self._rbuff_cap if self._rbuff_cap > 0 else self._rbuff_frames
             need = min(need, self._rbuff_frames)
             chunks = []
+            chunk_durations_ns = []
             remaining = need
-            for arr in reversed(self._rbuff):
+            for arr, pts_ns, dur_ns in reversed(self._rbuff):
                 n = arr.shape[0] if arr.ndim > 1 else arr.size
                 if remaining <= 0:
                     break
                 if n >= remaining:
-                    chunks.append(arr[-remaining:])
+                    # Split the last chunk proportionally for duration
+                    take = remaining
+                    chunks.append(arr[-take:])
+                    if self._sample_rate > 0:
+                        dur_take = int((take * Gst.SECOND) // self._sample_rate)
+                    else:
+                        dur_take = dur_ns
+                    chunk_durations_ns.append(dur_take)
                     remaining = 0
                 else:
                     chunks.append(arr)
+                    chunk_durations_ns.append(dur_ns)
                     remaining -= n
             if not chunks:
                 return None
             window = np.concatenate(chunks[::-1], axis=0)
-            return window.astype(np.float32, copy=False)
+            window = window.astype(np.float32, copy=False)
+            # Estimate window start PTS from last buffer end minus window duration
+            if not self._rbuff:
+                return (window, 0)
+            last_arr, last_pts_ns, last_dur_ns = self._rbuff[-1]
+            window_dur_ns = int(sum(chunk_durations_ns))
+            start_pts_ns = int((last_pts_ns + last_dur_ns) - window_dur_ns)
+            if start_pts_ns < 0:
+                start_pts_ns = 0
+            return (window, start_pts_ns)
 
     def _update(self):
         """Background puller that keeps the latest audio sample fresh."""
@@ -191,13 +213,15 @@ class MicrophoneStream(BaseStream):
                     arr = arr[: frames * self._channels].reshape(frames, self._channels)
                 with self._lock:
                     # Append to ring buffer
-                    self._rbuff.append(arr.copy())
                     frames = arr.shape[0] if arr.ndim > 1 else arr.size
+                    pts_ns = int(buffer.pts) if buffer.pts is not None else 0
+                    dur_ns = int((frames * Gst.SECOND) // self._sample_rate) if self._sample_rate else 0
+                    self._rbuff.append((arr.copy(), pts_ns, dur_ns))
                     self._rbuff_frames += frames
                     # Evict old data beyond capacity
                     while self._rbuff_cap > 0 and self._rbuff_frames > self._rbuff_cap and self._rbuff:
-                        oldest = self._rbuff[0]
-                        drop = oldest.shape[0] if oldest.ndim > 1 else oldest.size
+                        oldest_arr, oldest_pts, oldest_dur = self._rbuff[0]
+                        drop = oldest_arr.shape[0] if oldest_arr.ndim > 1 else oldest_arr.size
                         self._rbuff_frames -= drop
                         self._rbuff.pop(0)
             finally:

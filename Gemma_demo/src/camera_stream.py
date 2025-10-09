@@ -26,6 +26,7 @@ class CameraStream(BaseStream):
                 print(f"Cannot set buffer size to 1: {e}")
 
         self.frame = None
+        self.timestamp = None
         self.lock = threading.Lock()
         self.running = False
         self._thread = None
@@ -50,6 +51,9 @@ class CameraStream(BaseStream):
         """Update the camera stream.
         """
         while self.running:
+            # Grab before read to get a stamp as close as possible to the frame.
+            # TODO: get PTS, check if not zero, convert to nano seconds.
+            self.timestamp = int(self.cap.get(cv2.CAP_PROP_POS_MSEC) * 1000000) if self.cap.get(cv2.CAP_PROP_POS_MSEC) > 0 else 0
             ret, frame = self.cap.read()
             if not ret:
                 # Avoid tight spin if camera hiccups
@@ -63,14 +67,14 @@ class CameraStream(BaseStream):
     def read(self):
         """Read the latest frame from the camera stream.
 
-        :return: The latest frame from the camera stream or None if there is no frame.
-        :rtype: numpy.ndarray or None
+        :return: The latest frame from the camera stream with a timestamp or None if there is no frame.
+        :rtype: tuple of numpy.ndarray and int or None
         """
         if not self.running:
             print("[ERROR] Camera stream is not running")
             return None
         with self.lock:
-            return None if self.frame is None else self.frame.copy()
+            return None if self.frame is None else (self.frame.copy(), self.timestamp)
 
     def _wait_for_first_frame(self, timeout: float = 2.0) -> bool:
         """Block until the first frame is available or timeout elapses.
