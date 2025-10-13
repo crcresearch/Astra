@@ -292,15 +292,15 @@ if __name__ == "__main__":
         time.sleep(1)
         print(f"{3-i}")
     print("Make some noise!")
-    for i in range(10):
-        print(f"Attempt {i+1}/10")
-        audio_data, start_pts = mic.read()
-        if audio_data is not None:
-            print(f"Audio data shape: {audio_data.shape}")
-            print(f"Audio data type: {audio_data.dtype}")
-            print(f"Audio data range: [{audio_data.min():.3f}, {audio_data.max():.3f}]")
-            break
-        time.sleep(1)
-    else:
-        print("No audio data received after 10 attempts")
-    mic.stop()
+    try:
+        while True:
+            audio_data, start_pts = mic.read()
+            if audio_data is not None:
+                print(f"Start PTS: {start_pts}")
+                print(f"Audio data shape: {audio_data.shape}")
+                print(f"Audio data type: {audio_data.dtype}")
+                print(f"Audio data range: [{audio_data.min():.3f}, {audio_data.max():.3f}]")
+    except KeyboardInterrupt:
+        print("Keyboard interrupt")
+    finally:
+        mic.stop()

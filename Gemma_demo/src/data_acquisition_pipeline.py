@@ -23,7 +23,7 @@ with open(DEVICE_CONFIG_PATH, 'r') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
 avs = GStreamerMuxer(
-    pipeline_str=config['audio_video_pipeline']['appsrc_av_pipeline_mkv'],
+    pipeline_str=config['muxing_pipeline']['appsrc_av_pipeline_mkv'],
     output_path=f"../output/sessions/{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.mkv",
     video_width=640,
     video_height=360,
