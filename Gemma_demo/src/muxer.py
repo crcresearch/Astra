@@ -207,6 +207,9 @@ class GStreamerMuxer:
         buf.duration = self._frame_duration_ns if duration_ns is None else int(duration_ns)
         if pts_ns is None:
             self._video_pts_ns += buf.duration
+        if buf.pts == Gst.CLOCK_TIME_NONE:
+            print("[MUX][VIDEO][WARNING] Buffer does not contain PTS")
+            return
         ret = self._vid_src.emit("push-buffer", buf)
         if self._debug:
             print(f"[MUX][VIDEO] pts={int(buf.pts)} dur={int(buf.duration)} bytes={len(data)} ret={ret}")
@@ -240,6 +243,9 @@ class GStreamerMuxer:
         buf.fill(0, data)
         buf.pts = int(pts_ns)
         buf.duration = int(frames * Gst.SECOND // self._audio_rate) if duration_ns is None else int(duration_ns)
+        if buf.pts == Gst.CLOCK_TIME_NONE:
+            print("[MUX][AUDIO][WARNING] Buffer does not contain PTS.")
+            return
         ret = self._aud_src.emit("push-buffer", buf)
         if self._debug:
             print(f"[MUX][AUDIO] pts={int(buf.pts)} dur={int(buf.duration)} bytes={len(data)} ret={ret}")

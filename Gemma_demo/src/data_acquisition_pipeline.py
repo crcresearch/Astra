@@ -6,6 +6,7 @@ from muxer import GStreamerMuxer
 
 import yaml
 import time
+from datetime import datetime
 
 from gi.repository import Gst
 
@@ -22,8 +23,8 @@ with open(DEVICE_CONFIG_PATH, 'r') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
 avs = GStreamerMuxer(
-    pipeline_str=config['audio_video_pipeline']['appsrc_av_pipeline'],
-    output_path="output.mp4",
+    pipeline_str=config['audio_video_pipeline']['appsrc_av_pipeline_mkv'],
+    output_path=f"../output/sessions/{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.mkv",
     video_width=640,
     video_height=360,
     video_fps_num=20, video_fps_den=1,
