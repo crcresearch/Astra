@@ -79,6 +79,18 @@ We have an Adafruit Feather nRF52840 microcontroller which includes sensors for 
 - Board SDA to sensor SDA (blue wire)
 
 In the ardino environment, save this code with the name **adafruit_with_ens_start_stop_final**:
+
+Note: If you do not have the correct board selected in Arduino to run this code, you may have to follow the following steps:
+1) Go to File -> Preferences -> Additional Boards Manager URLs: and add this URL https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
+2) Then go to Tools -> Board -> Boards Manager and install the Adafruit nRF52 boards libarary
+3) Run the program on the Adafruit Feather nRF52840 Sense
+
+You will also need to add your own library to allow the microcontroller to recognize start and stop words.
+1) Download this .zip file
+2) Go to Sketch -> Include library -> Add .Zip library and navigate to where the downloaded .zip file is
+
+Finally, you may need to add any of the neccessary libararies included in the header files at the top of the code. To do so, go to Tools -> Manage Libaraies. 
+
 ```bash
 /* MODIFIED VERSION
  * Edge Impulse ingestion SDK
