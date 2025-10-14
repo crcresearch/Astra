@@ -86,7 +86,7 @@ Note: If you do not have the correct board selected in Arduino to run this code,
 3) Run the program on the Adafruit Feather nRF52840 Sense
 
 You will also need to add your own library to allow the microcontroller to recognize start and stop words.
-1) Download this .zip file
+1) Download this .zip file https://github.com/crcresearch/Astra/blob/main/ei-speech-recognition-correct-words-arduino-1.0.1.zip  
 2) Go to Sketch -> Include library -> Add .Zip library and navigate to where the downloaded .zip file is
 
 Finally, you may need to add any of the neccessary libararies included in the header files at the top of the code. To do so, go to Tools -> Manage Libaraies. 
